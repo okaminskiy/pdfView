@@ -105,15 +105,6 @@ public class PdfViewRenderManager {
     }
 
     public void updateQuality(List<PdfViewRenderer.Page> renderingPages) {
-        for (PdfViewRenderer.Page page : renderingPages) {
-            if(!page.shouldQualityBeUpdated()) {
-                continue;
-            }
-            page.updateParts();
-            recycleUnusedParts(renderedContentParts,  page.parts);
-            logRenderedContent("Rendered content : ", renderedContentParts);
-
-        }
         renderContent(renderingPages);
     }
 
@@ -123,8 +114,8 @@ public class PdfViewRenderManager {
             toRenderParts.addAll(page.getActualPageParts());
         }
         boolean allRendered = true;
-        for (PdfViewRenderer.Page page : renderingPages) {
-            if(!renderedContentParts.contains(page.getThumbnail())) {
+        for (PagePart pPart : toRenderParts) {
+            if(!renderedContentParts.contains(pPart)) {
                 allRendered = false;
                 break;
             }

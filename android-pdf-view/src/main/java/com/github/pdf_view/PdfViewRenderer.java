@@ -112,7 +112,6 @@ public class PdfViewRenderer {
                     return;
                 }
                 currentPage = configuration.getFirstPage();
-                pdfiumCore.openPage(pdfDocument, currentPage);
                 preparePages();
                 pdfRenderManager = new PdfViewRenderManager(document, pdfiumCore, PdfViewRenderer.this);
                 listener.onDocumentReady(pdfiumCore.getPageCount(pdfDocument), PdfViewRenderer.this);
@@ -138,6 +137,9 @@ public class PdfViewRenderer {
 
         for (Page page : pages) {
             page.createThumbnail();
+            if(page.width < maxWidth) {
+                page.pageOffsetLeft = (int) ((maxWidth - page.width) * optimalScale / 2);
+            }
         }
         updateThumbnails();
         updateQuality();
@@ -154,7 +156,7 @@ public class PdfViewRenderer {
             newPage.width = pdfiumCore.getPageWidth(pdfDocument, i);
             newPage.index = i;
             if(page != null) {
-                newPage.pageOffset = page.pageOffset + page.height;
+                newPage.pageOffsetTop = page.pageOffsetTop + page.height;
             }
             page = newPage;
             pages.add(page);
@@ -347,21 +349,14 @@ public class PdfViewRenderer {
 
         private PagePart thumbnail;
 
-        private int pageOffset;
+        private int pageOffsetTop;
         private int width;
+        private int pageOffsetLeft;
         private int height;
         private int index;
-        List<PagePart> parts = new ArrayList<>();
-        private int rowSize;
-        private int partsWidth;
-
-        private boolean isOverlaps(Rect rect1, Rect rect2) {
-            boolean result =  rect1.left < rect2.left + rect2.width()
-                    && rect1.left + rect1.width() > rect2.left
-                    && rect1.top < rect2.top + rect2.height()
-                    && rect1.top + rect1.height() > rect2.top;
-            return result;
-        }
+//        List<PagePart> parts = new ArrayList<>();
+//        private int rowSize;
+//        private int partsWidth;
 
         private int getBottom() {
             return getTop() + getHeight();
@@ -376,7 +371,7 @@ public class PdfViewRenderer {
         }
 
         private int getTop() {
-            return (int) ((pageOffset * optimalScale + configuration.getPageSpacing() * index) * scale);
+            return (int) ((pageOffsetTop * optimalScale + configuration.getPageSpacing() * index) * scale);
         }
 
         public float getScale() {
@@ -388,66 +383,65 @@ public class PdfViewRenderer {
         }
 
         public int getRenderLeft() {
-            return offsetLeft - scrollX;
+            return (int) (pageOffsetLeft * scale + offsetLeft - scrollX);
         }
 
-        public void updateParts() {
-            List<PagePart> result = new ArrayList<>();
-            int partBottom = pagePartHeight;
-            int partTop = 0;
-            int rowSize = 0;
-            while (partTop < getHeight()) {
-                int partLeft = 0;
-                int partRight = pagePartWidth;
-                rowSize = 0;
-                while (partLeft < getWidth()){
-                    Rect partBounds = new Rect(partLeft, partTop,
-                            partRight, partBottom);
-                    PagePart pagePart = new PagePart(partBounds, index, getWidth(),
-                            getHeight(), scale);
-                    partLeft = partBounds.right ;
-                    partRight = Math.min(getWidth(), partLeft + pagePartWidth);
-                    result.add(pagePart);
-                    rowSize ++;
-                }
-                partTop = partBottom;
-                partBottom = Math.min(getHeight(), partTop + pagePartHeight);
-            }
-            this.rowSize = rowSize;
-            this.partsWidth = result.get(rowSize - 1).getRight();
-            parts = result;
-        }
+//        public void updateParts() {
+//            List<PagePart> result = new ArrayList<>();
+//            int partBottom = pagePartHeight;
+//            int partTop = 0;
+//            int rowSize = 0;
+//            while (partTop < getHeight()) {
+//                int partLeft = 0;
+//                int partRight = pagePartWidth;
+//                rowSize = 0;
+//                while (partLeft < getWidth()){
+//                    Rect partBounds = new Rect(partLeft, partTop,
+//                            partRight, partBottom);
+//                    PagePart pagePart = new PagePart(partBounds, index, getWidth(),
+//                            getHeight(), scale);
+//                    partLeft = partBounds.right ;
+//                    partRight = Math.min(getWidth(), partLeft + pagePartWidth);
+//                    result.add(pagePart);
+//                    rowSize ++;
+//                }
+//                partTop = partBottom;
+//                partBottom = Math.min(getHeight(), partTop + pagePartHeight);
+//            }
+//            this.rowSize = rowSize;
+//            this.partsWidth = result.get(rowSize - 1).getRight();
+//            parts = result;
+//        }
 
-        public boolean shouldQualityBeUpdated() {
-                return partsWidth != getWidth();
-        }
+//        public boolean shouldQualityBeUpdated() {
+//                return partsWidth != getWidth();
+//        }
 
         public List<PagePart> getActualPageParts() {
             int visiblePageTop = Math.max(scrollY - getTop(), 0);
-            int visiblePageLeft = scrollX;
+            int visiblePageLeft = scrollX - getPageOffsetLeft();
             int visiblePageRight = surfaceWidth + visiblePageLeft;
-            int visiblePageBottom = surfaceHeight + visiblePageTop > getBottom()
-                    ? visiblePageTop + surfaceHeight : getBottom();
+            int visiblePageBottom = visiblePageTop +
+                    (visiblePageTop == 0 ? Math.min(getHeight(), surfaceHeight + scrollY - getTop())
+                    : Math.min(getHeight() - visiblePageTop, surfaceHeight + scrollX - getTop()));
             List<PagePart> pageParts = new ArrayList<>();
-            for (int i = 0; i < parts.size();) {
-                if(parts.get(i).getScaledBounds(scale).bottom < visiblePageTop) {
-                    i += rowSize;
-                    continue;
-                }
-                if(parts.get(i).getScaledBounds(scale).left > visiblePageRight) {
-                        i += rowSize - i % rowSize;
-                    continue;
-                }
-                if (parts.get(i).getScaledBounds(scale).top > visiblePageBottom) {
-                    break;
-                }
-                if(parts.get(i).getScaledBounds(scale).right < visiblePageLeft) {
-                    i++;
-                    continue;
-                }
-                PagePart part = parts.get(i);
-                pageParts.add(part);
-                i++;
+            if (getWidth() < thumbnail.getBounds().width()) {
+                return pageParts;
+            }
+            int left = (visiblePageLeft / pagePartWidth) * pagePartWidth;
+            int top = (visiblePageTop / pagePartHeight) * pagePartHeight;
+
+            while (top < visiblePageBottom) {
+                   int tempLeft = left;
+                   while (tempLeft < visiblePageRight) {
+                       Rect partBounds = new Rect(tempLeft, top,
+                               tempLeft + pagePartWidth, top + pagePartHeight);
+                       PagePart pagePart = new PagePart(partBounds, index, getWidth(),
+                               getHeight(), scale);
+                       pageParts.add(pagePart);
+                       tempLeft += pagePartWidth;
+                   }
+                top += pagePartHeight;
             }
             return pageParts;
         }
@@ -461,6 +455,10 @@ public class PdfViewRenderer {
                     new Rect(0, 0, getWidth(),  getHeight()), index,
                     getWidth(), getHeight(), getScale()
             );
+        }
+
+        public int getPageOffsetLeft() {
+            return (int) (pageOffsetLeft * scale);
         }
     }
 }

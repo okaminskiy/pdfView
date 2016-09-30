@@ -9,6 +9,8 @@ import android.util.LruCache;
 import com.shockwave.pdfium.PdfDocument;
 import com.shockwave.pdfium.PdfiumCore;
 
+import java.util.Objects;
+
 /**
  * @author <a href="mailto:okaminskyi@intropro.com">Oleh Kaminskyi</a>
  * @since Sep 19, 2016
@@ -65,8 +67,24 @@ public class PagePart {
         return renderedPagePart != null;
     }
 
-    public int getRight() {
-        return bounds.right;
+    public Rect getBounds() {
+        return bounds;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        PagePart pagePart = (PagePart) o;
+        return  pageWidth == pagePart.pageWidth &&
+                pageHeight == pagePart.pageWidth &&
+                index == pagePart.index &&
+                bounds.equals(bounds);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(pageWidth, pageHeight, bounds, pageWidth, pageHeight, index);
     }
 }
 
