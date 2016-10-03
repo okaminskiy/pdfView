@@ -33,6 +33,7 @@ public class PdfViewRenderer {
     private final Handler backgroundHandler;
     private PdfViewConfiguration configuration;
     private final PdfRendererListener listener;
+    private static final float MIN_SCALE = 0.2F;
     PdfDocument pdfDocument;
     PdfiumCore pdfiumCore;
 
@@ -96,8 +97,10 @@ public class PdfViewRenderer {
             @Override
             protected PdfDocument doInBackground(Void... voids) {
                 try {
-                    return pdfDocument = pdfiumCore.newDocument(getSeekableFileDescriptor(
+                    pdfDocument = pdfiumCore.newDocument(getSeekableFileDescriptor(
                             configuration.getUri().toString()), configuration.getPassword());
+                    preparePages();
+                    return pdfDocument;
                 } catch (final IOException e) {
                     new Handler(context.getMainLooper()).post(new Runnable() {
                         @Override
@@ -115,7 +118,6 @@ public class PdfViewRenderer {
                     return;
                 }
                 currentPage = configuration.getFirstPage();
-                preparePages();
                 pdfRenderManager = new PdfViewRenderManager(document, pdfiumCore, PdfViewRenderer.this);
                 listener.onDocumentReady(pdfiumCore.getPageCount(pdfDocument), PdfViewRenderer.this);
             }
@@ -217,8 +219,13 @@ public class PdfViewRenderer {
     }
 
     public void scaleBy(float focusX, float focusY, float deltaScale) {
+        float newScale =  deltaScale * this.scale;
+        if (newScale < MIN_SCALE) {
+            newScale = MIN_SCALE;
+            deltaScale = newScale/scale;
+        }
         matrix.postScale(deltaScale, deltaScale, focusX, focusY);
-        this.scale = deltaScale * this.scale;
+        this.scale = newScale;
         fixTranslate();
     }
 
@@ -266,11 +273,6 @@ public class PdfViewRenderer {
 
     public void notifyUpdate() {
         listener.onPageUpdated();
-    }
-
-    public void flingTo(int scrollX, int scrollY, float currVelocity) {
-        this.currVelocity = currVelocity;
-        scrollBy(scrollX - this.scrollX, scrollY  - this.scrollY, 0);
     }
 
     public interface PdfRendererListener {
