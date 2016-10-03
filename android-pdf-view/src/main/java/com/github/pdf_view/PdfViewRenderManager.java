@@ -111,7 +111,8 @@ public class PdfViewRenderManager {
     public void renderContent(List<PdfViewRenderer.Page> renderingPages) {
         List<PagePart> toRenderParts = new ArrayList<>();
         for (PdfViewRenderer.Page page: renderingPages) {
-            toRenderParts.addAll(page.getActualPageParts());
+            page.prepareActualParts();
+            toRenderParts.addAll(page.getParts());
         }
         boolean allRendered = true;
         for (PagePart pPart : toRenderParts) {
@@ -136,8 +137,8 @@ public class PdfViewRenderManager {
 
     public void draw(Canvas canvas, List<PdfViewRenderer.Page> pages) {
         for (PdfViewRenderer.Page p : pages) {
-            p.getThumbnail().drawPart(canvas, p.getScale(), p.getRenderLeft(), p.getRenderTop());
-            for (PagePart pPart : p.getActualPageParts()) {
+            p.getThumbnail().drawPart(canvas, p.getScale(), p.getRenderLeft(), p.getRenderTop(), true);
+            for (PagePart pPart : p.getParts()) {
                 pPart.drawPart(canvas, p.getScale(), p.getRenderLeft(), p.getRenderTop());
             }
         }
@@ -150,6 +151,23 @@ public class PdfViewRenderManager {
             builder.append(pPart.index).append(":").append(pPart.getScaledBounds(1)).append(" ");
         }
         Log.d(TAG, builder.toString());
+    }
+
+    public void recycle() {
+        if(renderContentTask != null) {
+            renderContentTask.cancel(true);
+        }
+        if(renderThumbnailsTask != null) {
+            renderThumbnailsTask.cancel(true);
+        }
+
+        for (PagePart thumbnail : renderedThumbnails) {
+            thumbnail.recycle();
+        }
+
+        for (PagePart content : renderedContentParts) {
+            content.recycle();
+        }
     }
 
     public class RenderTask extends AsyncTask<List<PagePart>, PagePart, PagePart> {

@@ -2,7 +2,6 @@ package com.github.pdf_view;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Point;
@@ -57,14 +56,18 @@ public class PdfViewRenderer {
     private Paint paint;
     private HandlerThread handlerThread;
 
-    private final static float PAGE_PART_TO_SCREEN_RATIO = 4F;
+    private final static float PAGE_PART_TO_SCREEN_RATIO = 3F;
 
     private int pagePartWidth;
     private int pagePartHeight;
 
-    private static final int RENDERED_THUMBNAIL_MARGIN = 2;
+    private static final int RENDERED_THUMBNAIL_MARGIN = 5;
 
     private PdfViewRenderManager pdfRenderManager;
+    private float currVelocity;
+
+    private BitmapPool thumbnailsPool = new BitmapPool(30);
+
 
     public PdfViewRenderer(Context context, PdfRendererListener listener) {
         pdfiumCore = new PdfiumCore(context);
@@ -245,7 +248,7 @@ public class PdfViewRenderer {
 }
 
     public void scrollTo(int scrollX, int scrollY) {
-        scrollBy(scrollX - this.scrollX, scrollY  - this.scrollY);
+        scrollBy(scrollX - this.scrollX, scrollY  - this.scrollY, 0);
     }
 
     public void scaleTo(int focusX, int focusY, float scale) {
@@ -253,7 +256,8 @@ public class PdfViewRenderer {
     }
 
     public void recycle() {
-
+        pdfRenderManager.recycle();
+        thumbnailsPool.recycle();
     }
 
     public void updateQuality() {
@@ -262,6 +266,11 @@ public class PdfViewRenderer {
 
     public void notifyUpdate() {
         listener.onPageUpdated();
+    }
+
+    public void flingTo(int scrollX, int scrollY, float currVelocity) {
+        this.currVelocity = currVelocity;
+        scrollBy(scrollX - this.scrollX, scrollY  - this.scrollY, 0);
     }
 
     public interface PdfRendererListener {
@@ -296,22 +305,33 @@ public class PdfViewRenderer {
         if(surfaceHeight == 0 || surfaceWidth == 0) {
             return;
         }
-        canvas.drawColor(Color.LTGRAY);
         List<Page> renderingPages = getRenderingPages();
         pdfRenderManager.draw(canvas, renderingPages);
     }
 
-    public void scrollBy(int dx, int dy) {
+    private void scrollBy(int dx, int dy, float currVelocity) {
         matrix.postTranslate(-dx, -dy);
         fixTranslate();
-        updateThumbnails();
+        if(currVelocity < 1000) {
+            updateThumbnails();
+        }
     }
 
     private void updateThumbnails() {
         int firstRenderedIndex = getFirstRenderedPageIndex();
+        int lastRenderedPage = getLastRenderedPage(firstRenderedIndex);
         int start = Math.max(firstRenderedIndex - RENDERED_THUMBNAIL_MARGIN, 0);
-        int end = Math.min(firstRenderedIndex + RENDERED_THUMBNAIL_MARGIN + 1, pages.size());
+        int end = Math.min(lastRenderedPage + RENDERED_THUMBNAIL_MARGIN + 1, pages.size());
         pdfRenderManager.renderThumbnail(pages.subList(start, end));
+    }
+
+    private int getLastRenderedPage(int firstRenderedPage) {
+        for(int i = firstRenderedPage; i < pages.size(); i++) {
+            if(pages.get(i).getTop() > scrollY + surfaceWidth) {
+                return i - 1;
+            }
+        }
+        return pages.size() - 1;
     }
 
     public void fixTranslate() {
@@ -349,14 +369,13 @@ public class PdfViewRenderer {
 
         private PagePart thumbnail;
 
+        private float lastUpdatedScale;
         private int pageOffsetTop;
         private int width;
         private int pageOffsetLeft;
         private int height;
         private int index;
-//        List<PagePart> parts = new ArrayList<>();
-//        private int rowSize;
-//        private int partsWidth;
+        List<PagePart> parts = new ArrayList<>();
 
         private int getBottom() {
             return getTop() + getHeight();
@@ -386,47 +405,18 @@ public class PdfViewRenderer {
             return (int) (pageOffsetLeft * scale + offsetLeft - scrollX);
         }
 
-//        public void updateParts() {
-//            List<PagePart> result = new ArrayList<>();
-//            int partBottom = pagePartHeight;
-//            int partTop = 0;
-//            int rowSize = 0;
-//            while (partTop < getHeight()) {
-//                int partLeft = 0;
-//                int partRight = pagePartWidth;
-//                rowSize = 0;
-//                while (partLeft < getWidth()){
-//                    Rect partBounds = new Rect(partLeft, partTop,
-//                            partRight, partBottom);
-//                    PagePart pagePart = new PagePart(partBounds, index, getWidth(),
-//                            getHeight(), scale);
-//                    partLeft = partBounds.right ;
-//                    partRight = Math.min(getWidth(), partLeft + pagePartWidth);
-//                    result.add(pagePart);
-//                    rowSize ++;
-//                }
-//                partTop = partBottom;
-//                partBottom = Math.min(getHeight(), partTop + pagePartHeight);
-//            }
-//            this.rowSize = rowSize;
-//            this.partsWidth = result.get(rowSize - 1).getRight();
-//            parts = result;
-//        }
+        public  List<PagePart> getParts() {
+            return parts;
+        }
 
-//        public boolean shouldQualityBeUpdated() {
-//                return partsWidth != getWidth();
-//        }
-
-        public List<PagePart> getActualPageParts() {
+        public void prepareActualParts() {
             int visiblePageTop = Math.max(scrollY - getTop(), 0);
-            int visiblePageLeft = scrollX - getPageOffsetLeft();
-            int visiblePageRight = surfaceWidth + visiblePageLeft;
-            int visiblePageBottom = visiblePageTop +
-                    (visiblePageTop == 0 ? Math.min(getHeight(), surfaceHeight + scrollY - getTop())
-                    : Math.min(getHeight() - visiblePageTop, surfaceHeight + scrollX - getTop()));
-            List<PagePart> pageParts = new ArrayList<>();
+            int visiblePageLeft = Math.max(scrollX - getPageOffsetLeft(), 0);
+            int visiblePageRight = Math.min(surfaceWidth + visiblePageLeft, getWidth());
+            int visiblePageBottom = visiblePageTop + Math.min(surfaceHeight - Math.max(0, getTop() - scrollY), getHeight() - visiblePageTop);
+            removeUnusedParts(visiblePageLeft, visiblePageTop, visiblePageRight, visiblePageBottom);
             if (getWidth() < thumbnail.getBounds().width()) {
-                return pageParts;
+                return;
             }
             int left = (visiblePageLeft / pagePartWidth) * pagePartWidth;
             int top = (visiblePageTop / pagePartHeight) * pagePartHeight;
@@ -435,15 +425,41 @@ public class PdfViewRenderer {
                    int tempLeft = left;
                    while (tempLeft < visiblePageRight) {
                        Rect partBounds = new Rect(tempLeft, top,
-                               tempLeft + pagePartWidth, top + pagePartHeight);
+                               Math.min(getWidth(), tempLeft + pagePartWidth),
+                               Math.min(top + pagePartHeight, getHeight()));
                        PagePart pagePart = new PagePart(partBounds, index, getWidth(),
-                               getHeight(), scale);
-                       pageParts.add(pagePart);
+                               getHeight(), scale, null);
+                       if(!parts.contains(pagePart)) {
+                           parts.add(pagePart);
+                       }
                        tempLeft += pagePartWidth;
                    }
                 top += pagePartHeight;
             }
-            return pageParts;
+        }
+
+        private boolean isOverlaps(Rect rect1, Rect rect2) {
+            boolean result =  rect1.left < rect2.left + rect2.width()
+                    && rect1.left + rect1.width() > rect2.left
+                    && rect1.top < rect2.top + rect2.height()
+                    && rect1.top + rect1.height() > rect2.top;
+            return result;
+        }
+
+        private void removeUnusedParts(int left, int top, int right, int bottom) {
+            Rect visibleBounds = new Rect(left, top, right, bottom);
+            if(lastUpdatedScale != scale) {
+                parts.clear();
+                lastUpdatedScale = scale;
+                return;
+            }
+            List<PagePart> actualLeft = new ArrayList<>();
+            for (PagePart pPart: parts) {
+                if(isOverlaps(pPart.getBounds(), visibleBounds)){
+                    actualLeft.add(pPart);
+                }
+            }
+            parts = actualLeft;
         }
 
         public PagePart getThumbnail() {
@@ -453,7 +469,7 @@ public class PdfViewRenderer {
         private void createThumbnail() {
             thumbnail = new PagePart(
                     new Rect(0, 0, getWidth(),  getHeight()), index,
-                    getWidth(), getHeight(), getScale()
+                    getWidth(), getHeight(), getScale(), thumbnailsPool
             );
         }
 
