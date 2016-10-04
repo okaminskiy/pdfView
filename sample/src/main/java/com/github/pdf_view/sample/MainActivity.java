@@ -4,18 +4,26 @@ import android.content.Intent;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import com.github.pdf_view.PdfView;
+import com.github.pdf_view.PdfViewConfiguration;
 
-public class MainActivity extends AppCompatActivity {
+import java.io.IOException;
+
+public class MainActivity extends AppCompatActivity implements PdfViewConfiguration.onPageChangedListener, PdfViewConfiguration.OnLoadListener, PdfViewConfiguration.OnErrorListener {
 
     private static final int PICK_PDF_REQUEST = 1;
     private PdfView pdfView;
+    private int pageCount;
+    private TextView pagesText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        pagesText = (TextView) findViewById(R.id.pagesText);
         pdfView = (PdfView) findViewById(R.id.pdfView);
     }
 
@@ -36,7 +44,29 @@ public class MainActivity extends AppCompatActivity {
         if(resultCode == RESULT_OK) {
             pdfView.from(data.getData()).setDoubleTapScale(4f).setPageSpacing(
                     getResources().getDimensionPixelSize(R.dimen.activity_horizontal_margin)
-            ).setDoubleTapScaleAnimationDuration(500).setFirstPage(2).maxScale(8F).minScale(0.25F).load();
+            ).setDoubleTapScaleAnimationDuration(500).setFirstPage(2)
+                    .setOnPageChangeListener(this)
+                    .setOnLoad(this)
+                    .setOnErrorListener(this)
+                    .maxScale(8F).minScale(0.25F).load();
         }
+    }
+
+    @Override
+    public void onPageChanged(int startPage, int endPage) {
+        String pagesChangedText = String.format(getString(R.string.pageChangedFormat),
+                startPage, endPage, pageCount);
+        pagesText.setText(pagesChangedText);
+    }
+
+    @Override
+    public void onLoad(int pageCount) {
+        Toast.makeText(this, getString(R.string.documentLoaded), Toast.LENGTH_LONG).show();
+        this.pageCount = pageCount;
+    }
+
+    @Override
+    public void onError(IOException e) {
+        Toast.makeText(this, getString(R.string.cannotLoadDocument), Toast.LENGTH_LONG).show();
     }
 }

@@ -41,8 +41,8 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
     private int scrollOffsetY;
     private OverScroller scroller;
     private FlingTask flingTask;
-    private PdfViewConfiguration config;
     private ScaleGestureDetector scaleDetector;
+    private long doubleTapAnimationDuration;
 
     public PdfView(Context context) {
         this(context, null);
@@ -117,7 +117,7 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
                 postInvalidate();
             }
         });
-        valueAnimator.setDuration(animated ? config.getDoubleTapScaleAnimationDuration() : 0);
+        valueAnimator.setDuration(animated ? doubleTapAnimationDuration : 0);
         valueAnimator.addListener(new SimpleAnimationListener() {
             @Override
             public void onAnimationEnd(Animator animation) {
@@ -148,12 +148,11 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
     }
 
     public PdfViewConfiguration from(Uri uri) {
-        config = new PdfViewConfiguration(getContext(), PdfView.this).setUri(uri);
-        return config;
+        return new PdfViewConfiguration(getContext(), PdfView.this).setUri(uri);
     }
 
     @Override
-    public void onDocumentReady(int pageCount, PdfViewRenderer renderer) {
+    public void onDocumentReady(PdfViewRenderer renderer, PdfViewConfiguration configuration) {
         if(this.pdfViewRenderer != null) {
             pdfViewRenderer.recycle();
         }
@@ -162,9 +161,15 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
             surfaceNotSet = false;
         }
         pdfViewRenderer.onViewSizeChanged(getWidth(), getHeight());
-        PdfViewGestureListener gestureListener = new PdfViewGestureListener(this, config);
+        PdfViewGestureListener gestureListener = new PdfViewGestureListener(this, configuration.getDoubleTapScale());
         dragGestureDetector = new GestureDetector(getContext(), gestureListener);
         scaleDetector = new ScaleGestureDetector(getContext(), gestureListener);
+        doubleTapAnimationDuration = configuration.getDoubleTapScaleAnimationDuration();
+    }
+
+    @Override
+    public void onPageUpdated() {
+        invalidate();
     }
 
     @Override
@@ -184,16 +189,6 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
             result |= dragGestureDetector.onTouchEvent(event);
         }
         return result;
-    }
-
-
-
-    @Override
-    public void onError(IOException e) {}
-
-    @Override
-    public void onPageUpdated() {
-        postInvalidate();
     }
 
     @Override

@@ -3,6 +3,8 @@ package com.github.pdf_view;
 import android.content.Context;
 import android.net.Uri;
 
+import java.io.IOException;
+
 /**
  * @author <a href="mailto:okaminskyi@intropro.com">Oleh Kaminskyi</a>
  * @since Sep 14, 2016
@@ -22,6 +24,9 @@ public class PdfViewConfiguration {
 
     private int doubleTapScaleAnimationDuration =  300;
     private int pageSpacing;
+    private onPageChangedListener pageChangeListener;
+    private OnLoadListener onLoadListener;
+    private OnErrorListener onErrorListener;
 
     public PdfViewConfiguration(Context context, PdfViewRenderer.PdfRendererListener pdfRendererListener) {
         renderer = new PdfViewRenderer(context, pdfRendererListener);
@@ -91,6 +96,52 @@ public class PdfViewConfiguration {
 
     public int getPageSpacing() {
         return pageSpacing;
+    }
+
+    public PdfViewConfiguration setOnPageChangeListener(onPageChangedListener pageChangeListener) {
+        this.pageChangeListener = pageChangeListener;
+        return this;
+    }
+
+    public PdfViewConfiguration setOnLoad(OnLoadListener onLoadListener) {
+        this.onLoadListener = onLoadListener;
+        return this;
+    }
+
+    public PdfViewConfiguration setOnErrorListener(OnErrorListener onErrorListener) {
+        this.onErrorListener = onErrorListener;
+        return this;
+    }
+
+
+    public void notifyError(IOException e) {
+        if(onErrorListener != null) {
+            onErrorListener.onError(e);
+        }
+    }
+
+    public void notifyPageLoaded(int pageCount) {
+        if(onLoadListener != null) {
+            onLoadListener.onLoad(pageCount);
+        }
+    }
+
+    public void notifyPageChanged(int startPage, int endPage) {
+        if(pageChangeListener != null) {
+            pageChangeListener.onPageChanged(startPage, endPage);
+        }
+    }
+
+    public interface onPageChangedListener {
+        void onPageChanged(int startPage, int endPage);
+    }
+
+    public interface OnLoadListener {
+        void onLoad(int pageCount);
+    }
+
+    public interface OnErrorListener {
+        void onError(IOException e);
     }
 }
 

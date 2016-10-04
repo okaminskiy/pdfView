@@ -9,13 +9,13 @@ import android.view.ScaleGestureDetector;
  * @author <a href="mailto:okaminskyi@intropro.com">Oleh Kaminskyi</a>
  * @since Sep 14, 2016
  */
-public class PdfViewGestureListener extends GestureDetector.SimpleOnGestureListener implements ScaleGestureDetector.OnScaleGestureListener {
+class PdfViewGestureListener extends GestureDetector.SimpleOnGestureListener implements ScaleGestureDetector.OnScaleGestureListener {
     private final PdfView pdfView;
     private final float doubleTapScale;
 
-    public PdfViewGestureListener(PdfView pdfView, PdfViewConfiguration config) {
+    public PdfViewGestureListener(PdfView pdfView, float doubleTapScale) {
         this.pdfView = pdfView;
-        this.doubleTapScale = config.getDoubleTapScale();
+        this.doubleTapScale = doubleTapScale;
     }
 
     @Override

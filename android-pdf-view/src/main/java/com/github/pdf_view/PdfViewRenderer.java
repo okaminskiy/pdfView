@@ -13,6 +13,7 @@ import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.ParcelFileDescriptor;
+import android.util.Log;
 import android.view.Display;
 import android.view.WindowManager;
 
@@ -29,8 +30,11 @@ import java.util.List;
  * @since Sep 14, 2016
  */
 public class PdfViewRenderer {
+    private int firstVisiblePage;
+    private int lastVisiblePage;
+
+
     private final Context context;
-    private final Handler backgroundHandler;
     private PdfViewConfiguration configuration;
     private final PdfRendererListener listener;
     private static final float MIN_SCALE = 0.2F;
@@ -40,7 +44,6 @@ public class PdfViewRenderer {
     private Matrix matrix = new Matrix();
 
     private float scale = 1f;
-    private int currentPage;
 
     private int surfaceWidth;
     private int surfaceHeight;
@@ -73,7 +76,6 @@ public class PdfViewRenderer {
         paint = new Paint();
         handlerThread = new HandlerThread(getClass().getSimpleName());
         handlerThread.start();
-        backgroundHandler = new Handler(handlerThread.getLooper());
         paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.ADD));
 
         WindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
@@ -101,7 +103,7 @@ public class PdfViewRenderer {
                     new Handler(context.getMainLooper()).post(new Runnable() {
                         @Override
                         public void run() {
-                            listener.onError(e);
+                            configuration.notifyError(e);
                         }
                     });
                 }
@@ -113,9 +115,9 @@ public class PdfViewRenderer {
                 if(document == null) {
                     return;
                 }
-                currentPage = configuration.getFirstPage();
                 pdfRenderManager = new PdfViewRenderManager(document, pdfiumCore, PdfViewRenderer.this);
-                listener.onDocumentReady(pdfiumCore.getPageCount(pdfDocument), PdfViewRenderer.this);
+                configuration.notifyPageLoaded(pdfiumCore.getPageCount(pdfDocument));
+                listener.onDocumentReady(PdfViewRenderer.this, configuration);
             }
         }.execute();
     }
@@ -194,24 +196,33 @@ public class PdfViewRenderer {
     }
 
     private List<Page> getRenderingPages() {
-        ArrayList<Page> result = new ArrayList<>();
-        for(int i = getFirstRenderedPageIndex(); i < pages.size(); i++ ) {
-            Page page = pages.get(i);
-            if(page.getTop() > surfaceHeight + scrollY) {
-                break;
-            }
-            result.add(page);
-        }
-        return result;
+        int firstRenderedPage = getFirstRenderedPageIndex(firstVisiblePage);
+        int lastRenderedPage = getLastRenderedPage(firstRenderedPage);
+        return pages.subList(firstRenderedPage, lastRenderedPage + 1);
     }
 
-    public int getFirstRenderedPageIndex() {
-        for (Page page : pages) {
-            if(page.getBottom() > scrollY) {
-                return page.index;
-            }
+    private int getFirstRenderedPageIndex(int firstVisiblePage) {
+        if(pages.get(firstVisiblePage).getTop() > scrollY) {
+            return searchFirstPageNegative(firstVisiblePage);
         }
-        return -1;
+        if(pages.get(firstVisiblePage).getBottom() <= scrollY) {
+            return searchFirstPagePositive(++firstVisiblePage);
+        }
+        return firstVisiblePage;
+    }
+
+    private int searchFirstPagePositive(int firstVisiblePage) {
+            if(pages.get(firstVisiblePage).getBottom() >= scrollY) {
+                return firstVisiblePage ;
+            }
+            return searchFirstPagePositive(++firstVisiblePage);
+    }
+
+    private int searchFirstPageNegative(int firstVisiblePage) {
+        if(pages.get(firstVisiblePage).getBottom() <= scrollY) {
+            return firstVisiblePage + 1;
+        }
+        return searchFirstPageNegative(--firstVisiblePage);
     }
 
     public void scaleBy(float focusX, float focusY, float deltaScale) {
@@ -251,7 +262,7 @@ public class PdfViewRenderer {
 }
 
     public void scrollTo(int scrollX, int scrollY) {
-        scrollBy(scrollX - this.scrollX, scrollY  - this.scrollY, 0);
+        scrollBy(scrollX - this.scrollX, scrollY  - this.scrollY);
     }
 
     public void scaleTo(int focusX, int focusY, float scale) {
@@ -271,8 +282,7 @@ public class PdfViewRenderer {
     }
 
     public interface PdfRendererListener {
-         void onDocumentReady(int pageCount, PdfViewRenderer renderer);
-         void onError(IOException e);
+         void onDocumentReady(PdfViewRenderer renderer, PdfViewConfiguration configuration);
          void onPageUpdated();
     }
 
@@ -306,25 +316,28 @@ public class PdfViewRenderer {
         pdfRenderManager.draw(canvas, renderingPages);
     }
 
-    private void scrollBy(int dx, int dy, float currVelocity) {
+    private void scrollBy(int dx, int dy) {
         matrix.postTranslate(-dx, -dy);
         fixTranslate();
-        if(currVelocity < 1000) {
-            updateThumbnails();
-        }
+        updateThumbnails();
     }
 
     private void updateThumbnails() {
-        int firstRenderedIndex = getFirstRenderedPageIndex();
-        int lastRenderedPage = getLastRenderedPage(firstRenderedIndex);
+        int firstRenderedIndex = getFirstRenderedPageIndex(firstVisiblePage);
+        int lastRenderedIndex = getLastRenderedPage(firstRenderedIndex);
         int start = Math.max(firstRenderedIndex - RENDERED_THUMBNAIL_MARGIN, 0);
-        int end = Math.min(lastRenderedPage + RENDERED_THUMBNAIL_MARGIN + 1, pages.size());
+        int end = Math.min(lastRenderedIndex + RENDERED_THUMBNAIL_MARGIN + 1, pages.size());
+        if(firstRenderedIndex != firstVisiblePage || lastRenderedIndex != lastVisiblePage) {
+            configuration.notifyPageChanged(firstRenderedIndex, lastRenderedIndex);
+            firstVisiblePage = firstRenderedIndex;
+            lastVisiblePage = lastRenderedIndex;
+        }
         pdfRenderManager.renderThumbnail(pages.subList(start, end));
     }
 
     private int getLastRenderedPage(int firstRenderedPage) {
         for(int i = firstRenderedPage; i < pages.size(); i++) {
-            if(pages.get(i).getTop() > scrollY + surfaceWidth) {
+            if(pages.get(i).getTop() > scrollY + surfaceHeight) {
                 return i - 1;
             }
         }
