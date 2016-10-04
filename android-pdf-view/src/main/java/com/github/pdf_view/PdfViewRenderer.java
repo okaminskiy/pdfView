@@ -65,10 +65,6 @@ public class PdfViewRenderer {
     private static final int RENDERED_THUMBNAIL_MARGIN = 5;
 
     private PdfViewRenderManager pdfRenderManager;
-    private float currVelocity;
-
-    private BitmapPool thumbnailsPool = new BitmapPool(30);
-
 
     public PdfViewRenderer(Context context, PdfRendererListener listener) {
         pdfiumCore = new PdfiumCore(context);
@@ -264,7 +260,6 @@ public class PdfViewRenderer {
 
     public void recycle() {
         pdfRenderManager.recycle();
-        thumbnailsPool.recycle();
     }
 
     public void updateQuality() {
@@ -417,12 +412,8 @@ public class PdfViewRenderer {
             int visiblePageRight = Math.min(surfaceWidth + visiblePageLeft, getWidth());
             int visiblePageBottom = visiblePageTop + Math.min(surfaceHeight - Math.max(0, getTop() - scrollY), getHeight() - visiblePageTop);
             removeUnusedParts(visiblePageLeft, visiblePageTop, visiblePageRight, visiblePageBottom);
-            if (getWidth() < thumbnail.getBounds().width()) {
-                return;
-            }
             int left = (visiblePageLeft / pagePartWidth) * pagePartWidth;
             int top = (visiblePageTop / pagePartHeight) * pagePartHeight;
-
             while (top < visiblePageBottom) {
                    int tempLeft = left;
                    while (tempLeft < visiblePageRight) {
@@ -430,7 +421,7 @@ public class PdfViewRenderer {
                                Math.min(getWidth(), tempLeft + pagePartWidth),
                                Math.min(top + pagePartHeight, getHeight()));
                        PagePart pagePart = new PagePart(partBounds, index, getWidth(),
-                               getHeight(), scale, null);
+                               getHeight(), scale);
                        if(!parts.contains(pagePart)) {
                            parts.add(pagePart);
                        }
@@ -457,7 +448,7 @@ public class PdfViewRenderer {
             }
             List<PagePart> actualLeft = new ArrayList<>();
             for (PagePart pPart: parts) {
-                if(isOverlaps(pPart.getBounds(), visibleBounds)){
+                if(isOverlaps(pPart.getScaledBounds(scale), visibleBounds)){
                     actualLeft.add(pPart);
                 }
             }
@@ -471,8 +462,7 @@ public class PdfViewRenderer {
         private void createThumbnail() {
             thumbnail = new PagePart(
                     new Rect(0, 0, getWidth(),  getHeight()), index,
-                    getWidth(), getHeight(), getScale(), thumbnailsPool
-            );
+                    getWidth(), getHeight(), getScale());
         }
 
         public int getPageOffsetLeft() {

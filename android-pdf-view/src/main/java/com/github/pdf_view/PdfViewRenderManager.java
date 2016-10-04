@@ -20,6 +20,10 @@ import java.util.concurrent.TimeUnit;
  * @since Sep 20, 2016
  */
 public class PdfViewRenderManager {
+    final int maxMemory = (int) (Runtime.getRuntime().maxMemory() / 1024);
+    final int cacheSize = maxMemory / 8;
+
+    private BitmapCache cache = new BitmapCache(cacheSize);
 
     private ThreadPoolExecutor thumbnailExecutor = new ThreadPoolExecutor(1, 2, 1, TimeUnit.SECONDS, new SynchronousQueue<Runnable>());
     private ThreadPoolExecutor contentExecutor = new ThreadPoolExecutor(1, 2, 1, TimeUnit.SECONDS, new SynchronousQueue<Runnable>());
@@ -87,7 +91,7 @@ public class PdfViewRenderManager {
         }
 
         for (PagePart pPart : toRecycle) {
-            pPart.recycle();
+            pPart.recycle(cache);
             rendered.remove(pPart);
         }
     }
@@ -162,12 +166,13 @@ public class PdfViewRenderManager {
         }
 
         for (PagePart thumbnail : renderedThumbnails) {
-            thumbnail.recycle();
+            thumbnail.recycle(cache);
         }
 
         for (PagePart content : renderedContentParts) {
-            content.recycle();
+            content.recycle(cache);
         }
+        cache.evictAll();
     }
 
     public class RenderTask extends AsyncTask<List<PagePart>, PagePart, PagePart> {
@@ -185,7 +190,7 @@ public class PdfViewRenderManager {
                 if (part.isRendered()) {
                     continue;
                 }
-                part.renderPart(document, pdfium);
+                part.renderPart(document, pdfium, cache);
                 if(isCancelled()) {
                     return part;
                 } else {

@@ -4,6 +4,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Point;
 import android.graphics.Rect;
 
 import com.shockwave.pdfium.PdfDocument;
@@ -19,7 +20,6 @@ public class PagePart {
 
     private final int pageWidth;
     private final int pageHeight;
-    private final BitmapPool bitmapPool;
 
     private Rect bounds;
     private float scale;
@@ -27,13 +27,12 @@ public class PagePart {
     int index;
 
 
-    public PagePart (Rect bounds, int index, int pageWidth, int pageHeight, float currentScale, BitmapPool bitmapPool) {
+    public PagePart (Rect bounds, int index, int pageWidth, int pageHeight, float currentScale) {
         this.index = index;
         this.bounds = bounds;
         this.pageWidth = pageWidth;
         this.pageHeight = pageHeight;
         this.scale = currentScale;
-        this.bitmapPool = bitmapPool;
     }
 
     public void drawPart(Canvas canvas, float scale, int pageOffsetLeft, int pageOffsetTop) {
@@ -52,40 +51,24 @@ public class PagePart {
         }
     }
 
-    public void renderPart(PdfDocument pdfDocument, PdfiumCore core) {
-        Bitmap bmp = createBitmap();
+    public void renderPart(PdfDocument pdfDocument, PdfiumCore core, BitmapCache bitmapCache) {
+        Bitmap bmp = bitmapCache.peek(new Point(bounds.width(), bounds.height()));
+        if(bmp == null) {
+            bmp = Bitmap.createBitmap(bounds.width(), bounds.height(), Bitmap.Config.ARGB_8888);
+        }
         core.renderPageBitmap(pdfDocument, bmp, index, -bounds.left, -bounds.top, pageWidth, pageHeight);
         renderedPagePart = bmp;
     }
 
-    private Bitmap createBitmap() {
-        Bitmap bmp = bitmapPool == null ? null : bitmapPool.peek();
-        if(bmp == null) {
-            bmp = Bitmap.createBitmap(bounds.width(), bounds.height(), Bitmap.Config.ARGB_8888);
-        }
-        if(bmp.getWidth() != bounds.width() || bmp.getHeight() != bounds.height()) {
-            bmp.recycle();
-            bmp = createBitmap();
-        }
-        return bmp;
-    }
-
-    public void recycle() {
+    public void recycle(BitmapCache bitmapCache) {
         Bitmap bmp = renderedPagePart;
         renderedPagePart = null;
         if(bmp != null) {
-            recycleBitmap(bmp);
+            bitmapCache.put(new Point(bounds.width(), bounds.height()), bmp);
         }
         renderedPagePart = null;
     }
 
-    private void recycleBitmap(Bitmap bmp) {
-        if(bitmapPool != null) {
-            bitmapPool.put(bmp);
-        } else {
-            bmp.recycle();
-        }
-    }
 
     public Rect getScaledBounds(float scale) {
         double deltaScale = (double) scale / this.scale;
@@ -99,19 +82,15 @@ public class PagePart {
         return renderedPagePart != null;
     }
 
-    public Rect getBounds() {
-        return bounds;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         PagePart pagePart = (PagePart) o;
         return  pageWidth == pagePart.pageWidth &&
-                pageHeight == pagePart.pageWidth &&
+                pageHeight == pagePart.pageHeight &&
                 index == pagePart.index &&
-                bounds.equals(bounds);
+                bounds.equals(pagePart.bounds);
     }
 
     @Override
