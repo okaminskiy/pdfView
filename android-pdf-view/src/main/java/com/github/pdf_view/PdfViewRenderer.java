@@ -14,6 +14,8 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.ParcelFileDescriptor;
+import android.os.Parcelable;
+import android.util.Log;
 import android.view.Display;
 import android.view.WindowManager;
 
@@ -306,6 +308,26 @@ public class PdfViewRenderer {
 
     public void notifyUpdate() {
         listener.onPageUpdated();
+    }
+
+    public void restoreState(PdfRendererState pdfState) {
+        if(!pdfState.getUri().equals(configuration.getUri())
+                || pages.size() <= pdfState.getFirstRenderedPage()) {
+            return;
+        }
+        scaleTo(0, 0, pdfState.getScale());
+        scrollToPage(pdfState.getFirstRenderedPage());
+        scrollBy((int) (pdfState.getOriginalPageScrollX() * optimalScale * scale), (int) (pdfState.getOriginalPageScrollY() * optimalScale * scale));
+        updateThumbnails();
+        updateQuality();
+    }
+
+    public Parcelable getCurrentState() {
+        int firstRenderedPage = getFirstRenderedPageIndex(firstVisiblePage);
+        int originalPageScrollY =
+                (int) (Math.max(scrollY - pages.get(firstRenderedPage).getTop(), 0f) / optimalScale / scale);
+        int originalPageScrollX = (int) (scrollX / (optimalScale * scale));
+        return new PdfRendererState(configuration.getUri(), scale, firstRenderedPage, originalPageScrollX, originalPageScrollY);
     }
 
     public interface PdfRendererListener {

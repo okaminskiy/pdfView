@@ -1,6 +1,7 @@
 package com.github.pdf_view.sample;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
@@ -16,9 +17,12 @@ public class MainActivity extends AppCompatActivity
         implements PdfViewConfiguration.onPageChangedListener, PdfViewConfiguration.OnLoadListener, PdfViewConfiguration.OnErrorListener, PdfViewConfiguration.OnScaleListener {
 
     private static final int PICK_PDF_REQUEST = 1;
+    private static final String PDF_URI = "PDF_URI";
+
     private PdfView pdfView;
     private int pageCount;
     private TextView pagesText;
+    private Uri pdfUri;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,6 +30,10 @@ public class MainActivity extends AppCompatActivity
         setContentView(R.layout.activity_main);
         pagesText = (TextView) findViewById(R.id.pagesText);
         pdfView = (PdfView) findViewById(R.id.pdfView);
+        if(savedInstanceState != null) {
+            pdfUri = savedInstanceState.getParcelable(PDF_URI);
+            initPdfView(pdfUri);
+        }
     }
 
     public void pickPdf(View view) {
@@ -41,19 +49,23 @@ public class MainActivity extends AppCompatActivity
         if(requestCode != PICK_PDF_REQUEST) {
             return;
         }
-
         if(resultCode == RESULT_OK) {
-            pdfView.from(data.getData()).setDoubleTapScale(4f).setPageSpacing(
-                    getResources().getDimensionPixelSize(R.dimen.activity_horizontal_margin)
-            ).setDoubleTapScaleAnimationDuration(500)
-                    .setPassword("12345")
-                    .setStartPage(2)
-                    .setOnPageChangeListener(this)
-                    .setOnLoadListener(this)
-                    .setOnErrorListener(this)
-                    .setOnScaleListener(this)
-                    .setMaxScale(8F).setMinScale(0.5F).load();
+            pdfUri = data.getData();
+            initPdfView(pdfUri);
         }
+    }
+
+    private void initPdfView(Uri uri) {
+        pdfView.from(uri).setDoubleTapScale(4f).setPageSpacing(
+                getResources().getDimensionPixelSize(R.dimen.activity_horizontal_margin)
+        ).setDoubleTapScaleAnimationDuration(500)
+                .setPassword("12345")
+                .setStartPage(2)
+                .setOnPageChangeListener(this)
+                .setOnLoadListener(this)
+                .setOnErrorListener(this)
+                .setOnScaleListener(this)
+                .setMaxScale(8F).setMinScale(0.5F).load();
     }
 
     @Override
@@ -76,5 +88,11 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onScale(float oldScale, float newScale, int oldScrollX, int newScrollX, int oldScrollY, int newScrollY) {
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putParcelable(PDF_URI, pdfUri);
     }
 }

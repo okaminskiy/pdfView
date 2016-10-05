@@ -7,6 +7,8 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
+import android.os.Parcelable;
 import android.support.annotation.CallSuper;
 import android.support.v4.view.NestedScrollingChild;
 import android.support.v4.view.NestedScrollingChildHelper;
@@ -29,6 +31,9 @@ import com.github.pdf_view.utils.SimpleAnimationListener;
  */
 public class PdfView extends View implements NestedScrollingChild, PdfViewRenderer.PdfRendererListener, ScrollingView {
 
+    private static final String SUPER_STATE = "SUPER_STATE";
+    private static final String RENDERER_STATE = "RENDERER_STATE";
+
     public PdfViewRenderer pdfViewRenderer;
 
     private boolean surfaceNotSet;
@@ -45,6 +50,7 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
     private boolean doubleTapScaleEnabled = true;
     private boolean flingEnabled = true;
     private ValueAnimator scaleAnimation;
+    private PdfRendererState pdfState;
 
 
     public PdfView(Context context) {
@@ -188,10 +194,20 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
             surfaceNotSet = false;
         }
         pdfViewRenderer.onViewSizeChanged(getWidth(), getHeight());
+        if(pdfState != null) {
+            pdfViewRenderer.restoreState(pdfState);
+            pdfState = null;
+        }
         PdfViewGestureListener gestureListener = new PdfViewGestureListener(this, configuration.getDoubleTapScale());
         dragGestureDetector = new GestureDetector(getContext(), gestureListener);
         scaleDetector = new ScaleGestureDetector(getContext(), gestureListener);
         doubleTapAnimationDuration = configuration.getDoubleTapScaleAnimationDuration();
+    }
+
+    public void scrollToPage(int page) {
+        if(pdfViewRenderer != null) {
+            pdfViewRenderer.scrollToPage(page);
+        }
     }
 
     @Override
@@ -407,6 +423,23 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
         } else {
             return 0;
         }
+    }
+
+    @Override
+    protected Parcelable onSaveInstanceState() {
+        Bundle bundle = new Bundle();
+        bundle.putParcelable(SUPER_STATE, super.onSaveInstanceState());
+        if(pdfViewRenderer != null) {
+            bundle.putParcelable(RENDERER_STATE, pdfViewRenderer.getCurrentState());
+        }
+        return bundle;
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Parcelable state) {
+        Bundle stateBundle = (Bundle) state;
+        super.onRestoreInstanceState(stateBundle.getParcelable(SUPER_STATE));
+        pdfState = stateBundle.getParcelable(RENDERER_STATE);
     }
 }
 
