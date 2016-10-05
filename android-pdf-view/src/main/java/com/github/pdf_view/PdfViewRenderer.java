@@ -10,10 +10,10 @@ import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.ParcelFileDescriptor;
-import android.util.Log;
 import android.view.Display;
 import android.view.WindowManager;
 
@@ -37,7 +37,6 @@ public class PdfViewRenderer {
     private final Context context;
     private PdfViewConfiguration configuration;
     private final PdfRendererListener listener;
-    private static final float MIN_SCALE = 0.2F;
     PdfDocument pdfDocument;
     PdfiumCore pdfiumCore;
 
@@ -63,11 +62,13 @@ public class PdfViewRenderer {
     private final static float PAGE_PART_TO_SCREEN_RATIO = 3F;
 
     private int pagePartWidth;
+    private int initialPage;
     private int pagePartHeight;
 
     private static final int RENDERED_THUMBNAIL_MARGIN = 5;
 
     private PdfViewRenderManager pdfRenderManager;
+    private float maxAvailableScale;
 
     public PdfViewRenderer(Context context, PdfRendererListener listener) {
         pdfiumCore = new PdfiumCore(context);
@@ -81,7 +82,12 @@ public class PdfViewRenderer {
         WindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
         Display display = wm.getDefaultDisplay();
         Point size = new Point();
-        display.getRealSize(size);
+        if(Build.VERSION.SDK_INT >= 13) {
+            display.getSize(size);
+        } else {
+            size.x = display.getWidth();
+            size.y = display.getHeight();
+        }
         pagePartWidth = (int) (size.x / PAGE_PART_TO_SCREEN_RATIO);
         pagePartHeight = (int) ((size.y) / PAGE_PART_TO_SCREEN_RATIO);
     }
@@ -144,6 +150,12 @@ public class PdfViewRenderer {
                 page.pageOffsetLeft = (int) ((maxWidth - page.width) * optimalScale / 2);
             }
         }
+
+        if(initialPage != -1) {
+            scrollToPage(initialPage);
+            initialPage = -1;
+        }
+
         updateThumbnails();
         updateQuality();
     }
@@ -164,6 +176,8 @@ public class PdfViewRenderer {
             page = newPage;
             pages.add(page);
         }
+        initialPage = configuration.getStartPage();
+        maxAvailableScale = (float) Integer.MAX_VALUE / getLastPageBottom();
     }
 
     public int getHorizontalScrollExtent() {
@@ -215,25 +229,34 @@ public class PdfViewRenderer {
             if(pages.get(firstVisiblePage).getBottom() >= scrollY) {
                 return firstVisiblePage ;
             }
-            return searchFirstPagePositive(++firstVisiblePage);
+            return firstVisiblePage == getLastPageIndex() ? firstVisiblePage
+                    : searchFirstPagePositive(++firstVisiblePage);
     }
 
     private int searchFirstPageNegative(int firstVisiblePage) {
         if(pages.get(firstVisiblePage).getBottom() <= scrollY) {
             return firstVisiblePage + 1;
         }
-        return searchFirstPageNegative(--firstVisiblePage);
+        return firstVisiblePage == 0 ?  0 : searchFirstPageNegative(--firstVisiblePage);
     }
 
     public void scaleBy(float focusX, float focusY, float deltaScale) {
-        float newScale =  deltaScale * this.scale;
-        if (newScale < MIN_SCALE) {
-            newScale = MIN_SCALE;
-            deltaScale = newScale/scale;
-        }
+        deltaScale = fixScale(deltaScale);
         matrix.postScale(deltaScale, deltaScale, focusX, focusY);
-        this.scale = newScale;
+        this.scale = scale * deltaScale;
         fixTranslate();
+    }
+
+    private float fixScale(float deltaScale) {
+        float newScale =  deltaScale * this.scale;
+        float maxZoom = Math.min(maxAvailableScale, configuration.getMaxScale());
+        if(newScale > maxZoom) {
+            return maxZoom / scale;
+        }
+        if (newScale < configuration.getMinScale()) {
+            return configuration.getMinScale() / scale;
+        }
+        return deltaScale;
     }
 
     public int getMaxScrollY() {
@@ -246,14 +269,14 @@ public class PdfViewRenderer {
 
 
     public int getVerticalScrollRange() {
-        Page lastPage = pages.get(pages.size() - 1);
+        Page lastPage = pages.get(getLastPageIndex());
         return Math.max(0,
                 lastPage.getBottom());
     }
 
 
     private int getLastPageBottom() {
-        Page lastPage = pages.get(pages.size() - 1);
+        Page lastPage = pages.get(getLastPageIndex());
         return lastPage.getBottom();
     }
 
@@ -263,6 +286,10 @@ public class PdfViewRenderer {
 
     public void scrollTo(int scrollX, int scrollY) {
         scrollBy(scrollX - this.scrollX, scrollY  - this.scrollY);
+    }
+
+    public void scrollToPage(int pageIndex) {
+        scrollTo(0, pages.get(pageIndex).getTop());
     }
 
     public void scaleTo(int focusX, int focusY, float scale) {
@@ -341,7 +368,7 @@ public class PdfViewRenderer {
                 return i - 1;
             }
         }
-        return pages.size() - 1;
+        return getLastPageIndex();
     }
 
     public void fixTranslate() {
@@ -373,6 +400,10 @@ public class PdfViewRenderer {
 
     public int getAllowedScroll(int min, int max, int requested) {
         return Math.max(Math.min(max, requested), min);
+    }
+
+    public int getLastPageIndex() {
+        return pages.size() == 0 ? 0 : pages.size() - 1;
     }
 
     public class Page {

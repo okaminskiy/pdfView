@@ -2,6 +2,7 @@ package com.github.pdf_view;
 
 import android.graphics.Bitmap;
 import android.graphics.Point;
+import android.support.v4.graphics.BitmapCompat;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -68,7 +69,7 @@ public class BitmapCache {
         int size = 0;
         for (Map.Entry<Point, LinkedList<Bitmap>> entries : sizedCache.entrySet()) {
             for (Bitmap bitmap : entries.getValue()) {
-               size += bitmap.getByteCount();
+               size += BitmapCompat.getAllocationByteCount(bitmap);
             }
         }
         return size / 1024;

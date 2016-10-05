@@ -11,7 +11,7 @@ import java.io.IOException;
  */
 public class PdfViewConfiguration {
 
-    private int firstPage;
+    private int startPage;
 
     private String password;
 
@@ -20,6 +20,9 @@ public class PdfViewConfiguration {
     private Uri uri;
 
     public static final float DEFAULT_DOUBLE_TAP_SCALE = 3F;
+    public static final float DEFAULT_MAX_ZOOM = 10F;
+    private static final float MIN_SUPPORTED_ZOOM = 0.2F;
+
     private float doubleTapScale = DEFAULT_DOUBLE_TAP_SCALE;
 
     private int doubleTapScaleAnimationDuration =  300;
@@ -27,25 +30,30 @@ public class PdfViewConfiguration {
     private onPageChangedListener pageChangeListener;
     private OnLoadListener onLoadListener;
     private OnErrorListener onErrorListener;
+    private float minScale = MIN_SUPPORTED_ZOOM;
+    private float maxScale = DEFAULT_MAX_ZOOM;
+    private OnScaleListener onScaleListener;
 
     public PdfViewConfiguration(Context context, PdfViewRenderer.PdfRendererListener pdfRendererListener) {
         renderer = new PdfViewRenderer(context, pdfRendererListener);
     }
 
-    public PdfViewConfiguration maxScale(float maxScale) {
+    public PdfViewConfiguration setMaxScale(float maxZoom) {
+        this.maxScale = maxZoom;
         return this;
     }
 
-    public PdfViewConfiguration minScale(float minScale) {
+    public PdfViewConfiguration setMinScale(float minZoom) {
+        this.minScale = minZoom;
         return this;
     }
 
-    public int getFirstPage() {
-        return firstPage;
+    public int getStartPage() {
+        return startPage;
     }
 
-    public PdfViewConfiguration setFirstPage(int firstPage) {
-        this.firstPage = firstPage;
+    public PdfViewConfiguration setStartPage(int firstPage) {
+        this.startPage = firstPage;
         return this;
     }
 
@@ -103,13 +111,18 @@ public class PdfViewConfiguration {
         return this;
     }
 
-    public PdfViewConfiguration setOnLoad(OnLoadListener onLoadListener) {
+    public PdfViewConfiguration setOnLoadListener(OnLoadListener onLoadListener) {
         this.onLoadListener = onLoadListener;
         return this;
     }
 
     public PdfViewConfiguration setOnErrorListener(OnErrorListener onErrorListener) {
         this.onErrorListener = onErrorListener;
+        return this;
+    }
+
+    public PdfViewConfiguration setOnScaleListener(OnScaleListener onScaleListener) {
+        this.onScaleListener = onScaleListener;
         return this;
     }
 
@@ -132,6 +145,24 @@ public class PdfViewConfiguration {
         }
     }
 
+    public void notifyScaleChanged(float oldScale, float newScale,
+                                   int oldScrollX, int newScrollX,
+                                   int oldScrollY, int newScrollY) {
+        if(onScaleListener != null) {
+            onScaleListener.onScale(oldScale, newScale,
+            oldScrollX, newScrollX,
+            oldScrollY, newScrollY);
+        }
+    }
+
+    public float getMinScale() {
+        return minScale;
+    }
+
+    public float getMaxScale() {
+        return maxScale;
+    }
+
     public interface onPageChangedListener {
         void onPageChanged(int startPage, int endPage);
     }
@@ -142,6 +173,12 @@ public class PdfViewConfiguration {
 
     public interface OnErrorListener {
         void onError(IOException e);
+    }
+
+    public interface OnScaleListener {
+        void onScale(float oldScale, float newScale,
+                     int oldScrollX, int newScrollX,
+                     int oldScrollY, int newScrollY);
     }
 }
 

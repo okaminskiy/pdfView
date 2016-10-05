@@ -1,18 +1,8 @@
 apply plugin: 'com.android.application'
 
 dependencies {
-    compile project(':android-pdf-view')
-    debugCompile project(':android-pdf-view')
-    releaseCompile project(':android-pdf-view')
-
-    compile 'com.android.support:appcompat-v7:24.1.0'
-}
-
-repositories {
-    jcenter()
-    mavenCentral()
-    maven {url "https://jitpack.io"}
-    maven { url "https://oss.sonatype.org/content/repositories/snapshots/" }
+    compile project(path:':android-pdf-view')
+    compile 'com.android.support:appcompat-v7:24.2.0'
 }
 
 android {
@@ -21,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId "sample.com.github.pdf_view.myapplication"
-        minSdkVersion 19
+        minSdkVersion 11
         targetSdkVersion 24
         versionCode 1
         versionName "1.0"
@@ -34,11 +24,13 @@ android {
 
     buildTypes {
         release {
+            debuggable false
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
 
         debug {
+            applicationIdSuffix '.debug'
             debuggable true
         }
     }

@@ -12,7 +12,8 @@ import com.github.pdf_view.PdfViewConfiguration;
 
 import java.io.IOException;
 
-public class MainActivity extends AppCompatActivity implements PdfViewConfiguration.onPageChangedListener, PdfViewConfiguration.OnLoadListener, PdfViewConfiguration.OnErrorListener {
+public class MainActivity extends AppCompatActivity
+        implements PdfViewConfiguration.onPageChangedListener, PdfViewConfiguration.OnLoadListener, PdfViewConfiguration.OnErrorListener, PdfViewConfiguration.OnScaleListener {
 
     private static final int PICK_PDF_REQUEST = 1;
     private PdfView pdfView;
@@ -44,11 +45,14 @@ public class MainActivity extends AppCompatActivity implements PdfViewConfigurat
         if(resultCode == RESULT_OK) {
             pdfView.from(data.getData()).setDoubleTapScale(4f).setPageSpacing(
                     getResources().getDimensionPixelSize(R.dimen.activity_horizontal_margin)
-            ).setDoubleTapScaleAnimationDuration(500).setFirstPage(2)
+            ).setDoubleTapScaleAnimationDuration(500)
+                    .setPassword("12345")
+                    .setStartPage(2)
                     .setOnPageChangeListener(this)
-                    .setOnLoad(this)
+                    .setOnLoadListener(this)
                     .setOnErrorListener(this)
-                    .maxScale(8F).minScale(0.25F).load();
+                    .setOnScaleListener(this)
+                    .setMaxScale(8F).setMinScale(0.5F).load();
         }
     }
 
@@ -68,5 +72,9 @@ public class MainActivity extends AppCompatActivity implements PdfViewConfigurat
     @Override
     public void onError(IOException e) {
         Toast.makeText(this, getString(R.string.cannotLoadDocument), Toast.LENGTH_LONG).show();
+    }
+
+    @Override
+    public void onScale(float oldScale, float newScale, int oldScrollX, int newScrollX, int oldScrollY, int newScrollY) {
     }
 }

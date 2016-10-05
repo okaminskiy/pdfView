@@ -95,7 +95,12 @@ public class PagePart {
 
     @Override
     public int hashCode() {
-        return Objects.hash(pageWidth, pageHeight, bounds, pageWidth, pageHeight, index);
+        int result = pageWidth;
+        result = 31 * result + pageHeight;
+        result = 31 * result + bounds.hashCode();
+        result = 31 * result + (renderedPagePart != null ? renderedPagePart.hashCode() : 0);
+        result = 31 * result + index;
+        return result;
     }
 }
 

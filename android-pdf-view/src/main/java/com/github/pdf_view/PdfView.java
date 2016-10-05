@@ -11,6 +11,7 @@ import android.support.annotation.CallSuper;
 import android.support.v4.view.NestedScrollingChild;
 import android.support.v4.view.NestedScrollingChildHelper;
 import android.support.v4.view.ScrollingView;
+import android.support.v4.view.ViewCompat;
 import android.util.AttributeSet;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
@@ -20,8 +21,6 @@ import android.widget.OverScroller;
 
 import com.github.pdf_view.utils.CancelableTask;
 import com.github.pdf_view.utils.SimpleAnimationListener;
-
-import java.io.IOException;
 
 
 /**
@@ -43,6 +42,10 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
     private FlingTask flingTask;
     private ScaleGestureDetector scaleDetector;
     private long doubleTapAnimationDuration;
+    private boolean doubleTapScaleEnabled = true;
+    private boolean flingEnabled = true;
+    private ValueAnimator scaleAnimation;
+
 
     public PdfView(Context context) {
         this(context, null);
@@ -90,6 +93,14 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
         }
     }
 
+    public void setDoubleTapScaleEnabled(boolean doubleTapScaleEnabled) {
+        this.doubleTapScaleEnabled = doubleTapScaleEnabled;
+    }
+
+    public void setFlingEnabled(boolean flingEnabled) {
+        this.flingEnabled = flingEnabled;
+    }
+
     public enum  State {
         SCROLL, IDLE, FLING, ZOOM, ZOOM_ANIMATED
     }
@@ -108,19 +119,32 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
     }
 
     public void scalePdfTo(final int focusX, final int focusY, float scale, boolean animated) {
-        ValueAnimator valueAnimator = ValueAnimator.ofFloat(pdfViewRenderer.getScale(), scale);
-        valueAnimator.addUpdateListener(new SimpleAnimationListener() {
+        if(scaleAnimation != null && scaleAnimation.isRunning()) {
+            scaleAnimation.cancel();
+        }
 
+        if(!doubleTapScaleEnabled) {
+            return;
+        }
+
+        scaleAnimation = ValueAnimator.ofFloat(pdfViewRenderer.getScale(), scale);
+        scaleAnimation.addUpdateListener(new SimpleAnimationListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
                 pdfViewRenderer.scaleTo(focusX, focusY, (float) animation.getAnimatedValue());
                 postInvalidate();
             }
         });
-        valueAnimator.setDuration(animated ? doubleTapAnimationDuration : 0);
-        valueAnimator.addListener(new SimpleAnimationListener() {
+        scaleAnimation.setDuration(animated ? doubleTapAnimationDuration : 0);
+        scaleAnimation.addListener(new SimpleAnimationListener() {
             @Override
             public void onAnimationEnd(Animator animation) {
+                setState(State.IDLE);
+                pdfViewRenderer.updateQuality();
+            }
+
+            @Override
+            public void onAnimationCancel(Animator animation) {
                 setState(State.IDLE);
                 pdfViewRenderer.updateQuality();
             }
@@ -128,7 +152,7 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
         if(animated) {
             setState(State.ZOOM_ANIMATED);
         }
-        valueAnimator.start();
+        scaleAnimation.start();
     }
 
     private void setState(State state) {
@@ -138,6 +162,9 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
     private void cancelAllAnimations() {
         if(flingTask != null) {
             flingTask.cancel();
+        }
+        if(scaleAnimation != null && scaleAnimation.isRunning()) {
+            scaleAnimation.cancel();
         }
     }
 
@@ -175,7 +202,7 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         boolean result = super.onTouchEvent(event);
-        if(pdfViewRenderer == null) {
+        if(pdfViewRenderer == null || !isEnabled()) {
             return result;
         }
         if(event.getAction() == MotionEvent.ACTION_DOWN) {
@@ -273,7 +300,12 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
             flingTask.cancel();
         }
 
-        if(!canScrollVertically(velocityY) && !canScrollHorizontally(velocityX)) {
+        if(!flingEnabled) {
+            return false;
+        }
+
+        if(!ViewCompat.canScrollVertically(this, velocityY)
+                && !ViewCompat.canScrollHorizontally(this, velocityX)) {
             return false;
         }
         setState(State.FLING);
@@ -281,7 +313,7 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
                 0, pdfViewRenderer.getHorizontalScrollRange(),
                 0, pdfViewRenderer.getVerticalScrollRange());
         flingTask = new FlingTask(this, scroller);
-        postOnAnimation(flingTask);
+        ViewCompat.postOnAnimation(this, flingTask);
         return true;
     }
 
@@ -302,7 +334,7 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
                 pdfView.pdfViewRenderer.updateQuality();
                 return;
             }
-            pdfView.postOnAnimation(this);
+            ViewCompat.postOnAnimation(pdfView, this);
             pdfView.scrollTo(scroller.getCurrX(), scroller.getCurrY());
         }
 

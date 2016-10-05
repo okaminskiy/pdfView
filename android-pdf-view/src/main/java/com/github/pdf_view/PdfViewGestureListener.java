@@ -103,7 +103,7 @@ class PdfViewGestureListener extends GestureDetector.SimpleOnGestureListener imp
         }  else {
             handled = true;
         }
-        return pdfView.dispatchNestedFling(velocityX, velocityY, handled);
+        return ViewCompat.dispatchNestedFling(pdfView, velocityX, velocityY, handled);
     }
 }
 
