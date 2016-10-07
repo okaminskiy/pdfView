@@ -1,4 +1,4 @@
-package com.github.pdf_view;
+package com.github.pdf_view.render;
 
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -9,8 +9,6 @@ import android.graphics.Rect;
 
 import com.shockwave.pdfium.PdfDocument;
 import com.shockwave.pdfium.PdfiumCore;
-
-import java.util.Objects;
 
 /**
  * @author <a href="mailto:okaminskyi@intropro.com">Oleh Kaminskyi</a>

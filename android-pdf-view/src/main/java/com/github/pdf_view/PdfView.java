@@ -21,6 +21,8 @@ import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.widget.OverScroller;
 
+import com.github.pdf_view.render.PdfRendererState;
+import com.github.pdf_view.render.PdfViewRenderer;
 import com.github.pdf_view.utils.CancelableTask;
 import com.github.pdf_view.utils.SimpleAnimationListener;
 

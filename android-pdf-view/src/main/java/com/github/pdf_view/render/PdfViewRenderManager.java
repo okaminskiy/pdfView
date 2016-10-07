@@ -1,4 +1,4 @@
-package com.github.pdf_view;
+package com.github.pdf_view.render;
 
 
 import android.graphics.Canvas;
@@ -47,9 +47,9 @@ public class PdfViewRenderManager {
     }
 
 
-    public void renderThumbnail(List<PdfViewRenderer.Page> thumbPages) {
+    public void renderThumbnail(List<Page> thumbPages) {
         boolean allRendered = true;
-        for (PdfViewRenderer.Page tPage : thumbPages) {
+        for (Page tPage : thumbPages) {
             if(!renderedThumbnails.contains(tPage.getThumbnail())) {
                 allRendered = false;
                 break;
@@ -59,7 +59,7 @@ public class PdfViewRenderManager {
             return;
         }
         List<PagePart> toRenderParts = new ArrayList<>();
-        for (PdfViewRenderer.Page page : thumbPages) {
+        for (Page page : thumbPages) {
             toRenderParts.add(page.getThumbnail());
         }
 
@@ -108,13 +108,13 @@ public class PdfViewRenderManager {
         cancelRenderTask.cancel(false);
     }
 
-    public void updateQuality(List<PdfViewRenderer.Page> renderingPages) {
+    public void updateQuality(List<Page> renderingPages) {
         renderContent(renderingPages);
     }
 
-    public void renderContent(List<PdfViewRenderer.Page> renderingPages) {
+    public void renderContent(List<Page> renderingPages) {
         List<PagePart> toRenderParts = new ArrayList<>();
-        for (PdfViewRenderer.Page page: renderingPages) {
+        for (Page page: renderingPages) {
             page.prepareActualParts();
             toRenderParts.addAll(page.getParts());
         }
@@ -139,8 +139,8 @@ public class PdfViewRenderManager {
         }
     }
 
-    public void draw(Canvas canvas, List<PdfViewRenderer.Page> pages) {
-        for (PdfViewRenderer.Page p : pages) {
+    public void draw(Canvas canvas, List<Page> pages) {
+        for (Page p : pages) {
             p.getThumbnail().drawPart(canvas, p.getScale(), p.getRenderLeft(), p.getRenderTop(), true);
             for (PagePart pPart : p.getParts()) {
                 pPart.drawPart(canvas, p.getScale(), p.getRenderLeft(), p.getRenderTop());

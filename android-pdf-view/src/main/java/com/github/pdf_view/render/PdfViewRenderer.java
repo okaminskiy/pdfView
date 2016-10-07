@@ -1,4 +1,4 @@
-package com.github.pdf_view;
+package com.github.pdf_view.render;
 
 import android.content.Context;
 import android.graphics.Canvas;
@@ -7,7 +7,6 @@ import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
-import android.graphics.Rect;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
@@ -15,10 +14,10 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.ParcelFileDescriptor;
 import android.os.Parcelable;
-import android.util.Log;
 import android.view.Display;
 import android.view.WindowManager;
 
+import com.github.pdf_view.PdfViewConfiguration;
 import com.shockwave.pdfium.PdfDocument;
 import com.shockwave.pdfium.PdfiumCore;
 
@@ -31,7 +30,7 @@ import java.util.List;
  * @author <a href="mailto:okaminskyi@intropro.com">Oleh Kaminskyi</a>
  * @since Sep 14, 2016
  */
-public class PdfViewRenderer {
+public class PdfViewRenderer implements RenderInfo {
     private int firstVisiblePage;
     private int lastVisiblePage;
 
@@ -46,8 +45,8 @@ public class PdfViewRenderer {
 
     private float scale = 1f;
 
-    private int surfaceWidth;
-    private int surfaceHeight;
+    private int renderWidth;
+    private int renderHeight;
 
     private List<Page> pages;
 
@@ -135,16 +134,16 @@ public class PdfViewRenderer {
         if(width == 0 || height == 0) {
             return;
         }
-        surfaceWidth = width;
-        surfaceHeight = height;
+        renderWidth = width;
+        renderHeight = height;
         int maxWidth = 0;
         for (Page page : pages) {
-            if(page.width > maxWidth) {
-                maxWidth = page.width;
+            if(page.getOriginalWidth() > maxWidth) {
+                maxWidth = page.getOriginalWidth();
             }
         }
 
-        optimalScale = (float)  surfaceWidth / maxWidth;
+        optimalScale = (float) renderWidth / maxWidth;
 
         for (Page page : pages) {
             page.createThumbnail();
@@ -169,6 +168,7 @@ public class PdfViewRenderer {
         for(int i = 0; i < pageCount; i++) {
             Page newPage = new Page();
             pdfiumCore.openPage(pdfDocument, i);
+            newPage.renderInfo = this;
             newPage.height = pdfiumCore.getPageHeight(pdfDocument, i);
             newPage.width = pdfiumCore.getPageWidth(pdfDocument, i);
             newPage.index = i;
@@ -183,11 +183,11 @@ public class PdfViewRenderer {
     }
 
     public int getHorizontalScrollExtent() {
-        return surfaceWidth;
+        return renderWidth;
     }
 
     public int getVerticalScrollExtent() {
-        return surfaceHeight;
+        return renderHeight;
     }
 
     public int getScrollY() {
@@ -209,6 +209,46 @@ public class PdfViewRenderer {
 
     public float getScale() {
         return scale;
+    }
+
+    @Override
+    public float getNormalizeScale() {
+        return optimalScale;
+    }
+
+    @Override
+    public int getPageSpacing() {
+        return configuration.getPageSpacing();
+    }
+
+    @Override
+    public int getRenderOffsetLeft() {
+        return offsetLeft;
+    }
+
+    @Override
+    public int getRenderOffsetTop() {
+        return offsetTop;
+    }
+
+    @Override
+    public int getPartWidth() {
+        return pagePartWidth;
+    }
+
+    @Override
+    public int getPartHeight() {
+        return pagePartHeight;
+    }
+
+    @Override
+    public int getRenderWidth() {
+        return renderWidth;
+    }
+
+    @Override
+    public int getRenderHeight() {
+        return renderHeight;
     }
 
     private List<Page> getRenderingPages() {
@@ -262,11 +302,11 @@ public class PdfViewRenderer {
     }
 
     public int getMaxScrollY() {
-        return Math.max(getVerticalScrollRange() - surfaceHeight, 0);
+        return Math.max(getVerticalScrollRange() - renderHeight, 0);
     }
 
     public int getMaxScrollX() {
-        return Math.max(getHorizontalScrollRange() - surfaceWidth, 0);
+        return Math.max(getHorizontalScrollRange() - renderWidth, 0);
     }
 
 
@@ -283,7 +323,7 @@ public class PdfViewRenderer {
     }
 
     public int getHorizontalScrollRange() {
-        return (int) Math.max(surfaceWidth * scale, 0);
+        return (int) Math.max(renderWidth * scale, 0);
 }
 
     public void scrollTo(int scrollX, int scrollY) {
@@ -357,8 +397,8 @@ public class PdfViewRenderer {
         return pfd;
     }
 
-    void draw(Canvas canvas) {
-        if(surfaceHeight == 0 || surfaceWidth == 0) {
+    public void draw(Canvas canvas) {
+        if(renderHeight == 0 || renderWidth == 0) {
             return;
         }
         List<Page> renderingPages = getRenderingPages();
@@ -386,7 +426,7 @@ public class PdfViewRenderer {
 
     private int getLastRenderedPage(int firstRenderedPage) {
         for(int i = firstRenderedPage; i < pages.size(); i++) {
-            if(pages.get(i).getTop() > scrollY + surfaceHeight) {
+            if(pages.get(i).getTop() > scrollY + renderHeight) {
                 return i - 1;
             }
         }
@@ -396,9 +436,9 @@ public class PdfViewRenderer {
     public void fixTranslate() {
         float[] values = new float[9];
         matrix.getValues(values);
-        if (surfaceWidth * scale < surfaceWidth) {
+        if (renderWidth * scale < renderWidth) {
             scrollX = 0;
-            offsetLeft = (int) ((surfaceWidth - surfaceWidth * scale) / 2);
+            offsetLeft = (int) ((renderWidth - renderWidth * scale) / 2);
             values[Matrix.MTRANS_X] = offsetLeft;
         } else {
             offsetLeft = 0;
@@ -407,10 +447,10 @@ public class PdfViewRenderer {
         }
 
         int lastPageBottom = getLastPageBottom();
-        if (lastPageBottom < surfaceHeight) {
+        if (lastPageBottom < renderHeight) {
             scrollY = 0;
-            offsetTop = (int) ((float)(surfaceHeight - lastPageBottom) / 2);
-            values[Matrix.MTRANS_Y] = offsetLeft;
+            offsetTop = (int) ((float)(renderHeight - lastPageBottom) / 2);
+            values[Matrix.MTRANS_Y] = offsetTop;
         } else {
             offsetTop = 0;
             scrollY = getAllowedScroll(0, getMaxScrollY()
@@ -428,112 +468,5 @@ public class PdfViewRenderer {
         return pages.size() == 0 ? 0 : pages.size() - 1;
     }
 
-    public class Page {
-
-        private PagePart thumbnail;
-
-        private float lastUpdatedScale;
-        private int pageOffsetTop;
-        private int width;
-        private int pageOffsetLeft;
-        private int height;
-        private int index;
-        List<PagePart> parts = new ArrayList<>();
-
-        private int getBottom() {
-            return getTop() + getHeight();
-        }
-
-        private int getHeight() {
-            return (int) (height * scale * optimalScale);
-        }
-
-        private int getWidth() {
-            return (int) (width * scale * optimalScale);
-        }
-
-        private int getTop() {
-            return (int) ((pageOffsetTop * optimalScale + configuration.getPageSpacing() * index) * scale);
-        }
-
-        public float getScale() {
-            return scale;
-        }
-
-        public int getRenderTop() {
-            return offsetTop + getTop() - scrollY;
-        }
-
-        public int getRenderLeft() {
-            return (int) (pageOffsetLeft * scale + offsetLeft - scrollX);
-        }
-
-        public  List<PagePart> getParts() {
-            return parts;
-        }
-
-        public void prepareActualParts() {
-            int visiblePageTop = Math.max(scrollY - getTop(), 0);
-            int visiblePageLeft = Math.max(scrollX - getPageOffsetLeft(), 0);
-            int visiblePageRight = Math.min(surfaceWidth + visiblePageLeft, getWidth());
-            int visiblePageBottom = visiblePageTop + Math.min(surfaceHeight - Math.max(0, getTop() - scrollY), getHeight() - visiblePageTop);
-            removeUnusedParts(visiblePageLeft, visiblePageTop, visiblePageRight, visiblePageBottom);
-            int left = (visiblePageLeft / pagePartWidth) * pagePartWidth;
-            int top = (visiblePageTop / pagePartHeight) * pagePartHeight;
-            while (top < visiblePageBottom) {
-                   int tempLeft = left;
-                   while (tempLeft < visiblePageRight) {
-                       Rect partBounds = new Rect(tempLeft, top,
-                               Math.min(getWidth(), tempLeft + pagePartWidth),
-                               Math.min(top + pagePartHeight, getHeight()));
-                       PagePart pagePart = new PagePart(partBounds, index, getWidth(),
-                               getHeight(), scale);
-                       if(!parts.contains(pagePart)) {
-                           parts.add(pagePart);
-                       }
-                       tempLeft += pagePartWidth;
-                   }
-                top += pagePartHeight;
-            }
-        }
-
-        private boolean isOverlaps(Rect rect1, Rect rect2) {
-            boolean result =  rect1.left < rect2.left + rect2.width()
-                    && rect1.left + rect1.width() > rect2.left
-                    && rect1.top < rect2.top + rect2.height()
-                    && rect1.top + rect1.height() > rect2.top;
-            return result;
-        }
-
-        private void removeUnusedParts(int left, int top, int right, int bottom) {
-            Rect visibleBounds = new Rect(left, top, right, bottom);
-            if(lastUpdatedScale != scale) {
-                parts.clear();
-                lastUpdatedScale = scale;
-                return;
-            }
-            List<PagePart> actualLeft = new ArrayList<>();
-            for (PagePart pPart: parts) {
-                if(isOverlaps(pPart.getScaledBounds(scale), visibleBounds)){
-                    actualLeft.add(pPart);
-                }
-            }
-            parts = actualLeft;
-        }
-
-        public PagePart getThumbnail() {
-            return thumbnail;
-        }
-
-        private void createThumbnail() {
-            thumbnail = new PagePart(
-                    new Rect(0, 0, getWidth(),  getHeight()), index,
-                    getWidth(), getHeight(), getScale());
-        }
-
-        public int getPageOffsetLeft() {
-            return (int) (pageOffsetLeft * scale);
-        }
-    }
 }
 

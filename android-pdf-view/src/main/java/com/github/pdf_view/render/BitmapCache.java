@@ -1,4 +1,4 @@
-package com.github.pdf_view;
+package com.github.pdf_view.render;
 
 import android.graphics.Bitmap;
 import android.graphics.Point;

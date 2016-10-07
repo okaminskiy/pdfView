@@ -3,6 +3,8 @@ package com.github.pdf_view;
 import android.content.Context;
 import android.net.Uri;
 
+import com.github.pdf_view.render.PdfViewRenderer;
+
 import java.io.IOException;
 
 /**
