@@ -21,6 +21,14 @@ public class Page {
     private int index;
     List<PagePart> parts = new ArrayList<>();
 
+    public Page (int pageIndex, int width, int height, RenderInfo renderInfo) {
+        this.index = pageIndex;
+        this.width = width;
+        this.height = height;
+        this.renderInfo = renderInfo;
+    }
+
+
     public int getBottom() {
         return getTop() + getHeight();
     }
@@ -115,7 +123,7 @@ public class Page {
         return thumbnail;
     }
 
-    private void createThumbnail() {
+    public void createThumbnail() {
         thumbnail = new PagePart(
                 new Rect(0, 0, getWidth(), getHeight()), index,
                 getWidth(), getHeight(), getScale());
@@ -127,6 +135,22 @@ public class Page {
 
     public int getOriginalWidth() {
         return width;
+    }
+
+    public int getPageOffsetTop() {
+        return pageOffsetTop;
+    }
+
+    public int getOriginalHeight() {
+        return height;
+    }
+
+    public void setPageOffsetTop(int pageOffsetTop) {
+        this.pageOffsetTop = pageOffsetTop;
+    }
+
+    public void setPageOffsetLeft(int pageOffsetLeft) {
+        this.pageOffsetLeft = pageOffsetLeft;
     }
 }
 

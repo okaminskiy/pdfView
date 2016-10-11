@@ -34,7 +34,6 @@ public class PdfViewRenderer implements RenderInfo {
     private int firstVisiblePage;
     private int lastVisiblePage;
 
-
     private final Context context;
     private PdfViewConfiguration configuration;
     private final PdfRendererListener listener;
@@ -147,8 +146,8 @@ public class PdfViewRenderer implements RenderInfo {
 
         for (Page page : pages) {
             page.createThumbnail();
-            if(page.width < maxWidth) {
-                page.pageOffsetLeft = (int) ((maxWidth - page.width) * optimalScale / 2);
+            if(page.getOriginalWidth() < maxWidth) {
+                page.setPageOffsetLeft( (int) ((maxWidth - page.getOriginalWidth()) * optimalScale / 2));
             }
         }
 
@@ -166,14 +165,11 @@ public class PdfViewRenderer implements RenderInfo {
         pages = new ArrayList(pageCount);
         Page page = null;
         for(int i = 0; i < pageCount; i++) {
-            Page newPage = new Page();
             pdfiumCore.openPage(pdfDocument, i);
-            newPage.renderInfo = this;
-            newPage.height = pdfiumCore.getPageHeight(pdfDocument, i);
-            newPage.width = pdfiumCore.getPageWidth(pdfDocument, i);
-            newPage.index = i;
+            Page newPage = new Page(i,  pdfiumCore.getPageWidth(pdfDocument, i),
+                    pdfiumCore.getPageHeight(pdfDocument, i), this);
             if(page != null) {
-                newPage.pageOffsetTop = page.pageOffsetTop + page.height;
+                newPage.setPageOffsetTop(page.getPageOffsetTop() + page.getOriginalHeight());
             }
             page = newPage;
             pages.add(page);
@@ -368,6 +364,13 @@ public class PdfViewRenderer implements RenderInfo {
                 (int) (Math.max(scrollY - pages.get(firstRenderedPage).getTop(), 0f) / optimalScale / scale);
         int originalPageScrollX = (int) (scrollX / (optimalScale * scale));
         return new PdfRendererState(configuration.getUri(), scale, firstRenderedPage, originalPageScrollX, originalPageScrollY);
+    }
+
+    @Override
+    public void onOptimalScaleChanged(float newOptimalScale) {
+        float deltaScale = newOptimalScale / optimalScale;
+        scale *= deltaScale;
+        optimalScale = newOptimalScale;
     }
 
     public interface PdfRendererListener {
