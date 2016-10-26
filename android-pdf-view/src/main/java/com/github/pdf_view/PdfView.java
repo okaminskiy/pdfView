@@ -329,7 +329,7 @@ public class PdfView extends View implements NestedScrollingChild, PdfViewRender
         setState(State.FLING);
         scroller.fling(pdfViewRenderer.getScrollX(), pdfViewRenderer.getScrollY(), velocityX, velocityY,
                 0, pdfViewRenderer.getHorizontalScrollRange(),
-                0, pdfViewRenderer.getVerticalScrollRange());
+                0, Integer.MAX_VALUE);
         flingTask = new FlingTask(this, scroller);
         ViewCompat.postOnAnimation(this, flingTask);
         return true;

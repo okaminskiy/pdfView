@@ -14,6 +14,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.ParcelFileDescriptor;
 import android.os.Parcelable;
+import android.util.Log;
 import android.view.Display;
 import android.view.WindowManager;
 
@@ -65,7 +66,7 @@ public class PdfViewRenderer implements RenderInfo {
     private int initialPage;
     private int pagePartHeight;
 
-    private static final int RENDERED_THUMBNAIL_MARGIN = 5;
+    private static final int RENDERED_THUMBNAIL_MARGIN = 3;
 
     private PdfViewRenderManager pdfRenderManager;
     private float maxAvailableScale;
@@ -135,28 +136,8 @@ public class PdfViewRenderer implements RenderInfo {
         }
         renderWidth = width;
         renderHeight = height;
-        int maxWidth = 0;
-        for (Page page : pages) {
-            if(page.getOriginalWidth() > maxWidth) {
-                maxWidth = page.getOriginalWidth();
-            }
-        }
-
-        optimalScale = (float) renderWidth / maxWidth;
-
-        for (Page page : pages) {
-            page.createThumbnail();
-            if(page.getOriginalWidth() < maxWidth) {
-                page.setPageOffsetLeft( (int) ((maxWidth - page.getOriginalWidth()) * optimalScale / 2));
-            }
-        }
-
-        if(initialPage != -1) {
-            scrollToPage(initialPage);
-            initialPage = -1;
-        }
-
-        updateThumbnails();
+//        initPages(0, pages.size());
+        scrollToPage(initialPage == -1 ? 0 : initialPage);
         updateQuality();
     }
 
@@ -165,17 +146,12 @@ public class PdfViewRenderer implements RenderInfo {
         pages = new ArrayList(pageCount);
         Page page = null;
         for(int i = 0; i < pageCount; i++) {
-            pdfiumCore.openPage(pdfDocument, i);
-            Page newPage = new Page(i,  pdfiumCore.getPageWidth(pdfDocument, i),
-                    pdfiumCore.getPageHeight(pdfDocument, i), this);
-            if(page != null) {
-                newPage.setPageOffsetTop(page.getPageOffsetTop() + page.getOriginalHeight());
-            }
+            Page newPage = new Page(i, this);
+            newPage.setPreviousPage(page);
             page = newPage;
             pages.add(page);
         }
         initialPage = configuration.getStartPage();
-        maxAvailableScale = (float) Integer.MAX_VALUE / getLastPageBottom();
     }
 
     public int getHorizontalScrollExtent() {
@@ -247,17 +223,26 @@ public class PdfViewRenderer implements RenderInfo {
         return renderHeight;
     }
 
+    @Override
+    public Point getPageSize(int index) {
+        pdfiumCore.openPage(pdfDocument, index);
+        Point result = new Point();
+        result.x = pdfiumCore.getPageWidth(pdfDocument, index);
+        result.y = pdfiumCore.getPageHeight(pdfDocument, index);
+        return result;
+    }
+
     private List<Page> getRenderingPages() {
         int firstRenderedPage = getFirstRenderedPageIndex(firstVisiblePage);
-        int lastRenderedPage = getLastRenderedPage(firstRenderedPage);
+        int lastRenderedPage = getLastRenderedPageIndex(firstRenderedPage);
         return pages.subList(firstRenderedPage, lastRenderedPage + 1);
     }
 
     private int getFirstRenderedPageIndex(int firstVisiblePage) {
-        if(pages.get(firstVisiblePage).getTop() > scrollY) {
+        if(pages.get(firstVisiblePage).getTop() >= scrollY) {
             return searchFirstPageNegative(firstVisiblePage);
         }
-        if(pages.get(firstVisiblePage).getBottom() <= scrollY) {
+        if(pages.get(firstVisiblePage).getBottom() < scrollY) {
             return searchFirstPagePositive(++firstVisiblePage);
         }
         return firstVisiblePage;
@@ -352,7 +337,6 @@ public class PdfViewRenderer implements RenderInfo {
             return;
         }
         scaleTo(0, 0, pdfState.getScale());
-        scrollToPage(pdfState.getFirstRenderedPage());
         scrollBy((int) (pdfState.getOriginalPageScrollX() * optimalScale * scale), (int) (pdfState.getOriginalPageScrollY() * optimalScale * scale));
         updateThumbnails();
         updateQuality();
@@ -366,11 +350,17 @@ public class PdfViewRenderer implements RenderInfo {
         return new PdfRendererState(configuration.getUri(), scale, firstRenderedPage, originalPageScrollX, originalPageScrollY);
     }
 
-    @Override
-    public void onOptimalScaleChanged(float newOptimalScale) {
-        float deltaScale = newOptimalScale / optimalScale;
-        scale *= deltaScale;
-        optimalScale = newOptimalScale;
+
+    public void pageSizeUpdated(Page page, int deltaBottom) {
+        if(optimalScale == 0) {
+            optimalScale = page.getOptimalPageScale();
+        }
+//        if(page.getIndex() < firstVisiblePage) {
+//            scrollBy(0, deltaBottom);
+//        }
+//        updateThumbnails();
+//        notifyUpdate();
+//        Log.wtf("Okaminskyi", "PageSize updated");
     }
 
     public interface PdfRendererListener {
@@ -414,9 +404,52 @@ public class PdfViewRenderer implements RenderInfo {
         updateThumbnails();
     }
 
+//    private void computeVisibleWindowPagesSize() {
+//        int firstRenderedIndex = getFirstRenderedPageIndex(firstVisiblePage);
+//        int lastRenderedIndex = getLastRenderedPageIndex(firstRenderedIndex);
+//        int start = Math.max(firstRenderedIndex - RENDERED_THUMBNAIL_MARGIN, 0);
+//        int end = Math.min(lastRenderedIndex + RENDERED_THUMBNAIL_MARGIN + 1, pages.size());
+//        initPages(start, end);
+//
+//        if(lastRenderedIndex != getLastRenderedPageIndex(firstRenderedIndex)) {
+//            firstVisiblePage = firstRenderedIndex;
+//            computeVisibleWindowPagesSize();
+//            return;
+//        }
+//        int currentTop = pages.get(firstRenderedIndex).getTop();
+//        int deltaScrollY = pages.get(firstRenderedIndex).getTop() - currentTop;
+//        if(deltaScrollY != 0) {
+//            scrollY += deltaScrollY;
+//            fixTranslate();
+//            return;
+//        }
+//
+//        maxAvailableScale = (float) Integer.MAX_VALUE / getLastPageBottom();
+//        if(firstRenderedIndex != firstVisiblePage || lastRenderedIndex != lastVisiblePage) {
+//            configuration.notifyPageChanged(firstRenderedIndex, lastRenderedIndex);
+//            firstVisiblePage = firstRenderedIndex;
+//            lastVisiblePage = lastRenderedIndex;
+//        }
+//    }
+
+//    private void initPages(int start, int end) {
+//        List<Page> currentWindow = pages.subList(start, end);
+//        float newOptimalScale = Float.MAX_VALUE;
+//        for (Page page : currentWindow) {
+//            if(page.getOptimalPageScale() < newOptimalScale) {
+//                newOptimalScale = page.getOptimalPageScale() ;
+//            }
+//        }
+//        if(optimalScale == 0) {
+//            optimalScale = newOptimalScale;
+//        } else if(newOptimalScale < optimalScale) {
+//            optimalScale = newOptimalScale;
+//        }
+//    }
+
     private void updateThumbnails() {
         int firstRenderedIndex = getFirstRenderedPageIndex(firstVisiblePage);
-        int lastRenderedIndex = getLastRenderedPage(firstRenderedIndex);
+        int lastRenderedIndex = getLastRenderedPageIndex(firstRenderedIndex);
         int start = Math.max(firstRenderedIndex - RENDERED_THUMBNAIL_MARGIN, 0);
         int end = Math.min(lastRenderedIndex + RENDERED_THUMBNAIL_MARGIN + 1, pages.size());
         if(firstRenderedIndex != firstVisiblePage || lastRenderedIndex != lastVisiblePage) {
@@ -424,10 +457,10 @@ public class PdfViewRenderer implements RenderInfo {
             firstVisiblePage = firstRenderedIndex;
             lastVisiblePage = lastRenderedIndex;
         }
-        pdfRenderManager.renderThumbnail(pages.subList(start, end));
+        pdfRenderManager.renderThumbnails(pages.subList(start, end));
     }
 
-    private int getLastRenderedPage(int firstRenderedPage) {
+    private int getLastRenderedPageIndex(int firstRenderedPage) {
         for(int i = firstRenderedPage; i < pages.size(); i++) {
             if(pages.get(i).getTop() > scrollY + renderHeight) {
                 return i - 1;
@@ -461,6 +494,7 @@ public class PdfViewRenderer implements RenderInfo {
             values[Matrix.MTRANS_Y] = -scrollY;
         }
         matrix.setValues(values);
+//        computeVisibleWindowPagesSize();
     }
 
     public int getAllowedScroll(int min, int max, int requested) {
@@ -470,6 +504,5 @@ public class PdfViewRenderer implements RenderInfo {
     public int getLastPageIndex() {
         return pages.size() == 0 ? 0 : pages.size() - 1;
     }
-
 }
 

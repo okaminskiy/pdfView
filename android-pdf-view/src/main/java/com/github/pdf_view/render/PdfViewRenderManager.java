@@ -5,6 +5,7 @@ import android.graphics.Canvas;
 import android.os.AsyncTask;
 import android.support.annotation.CallSuper;
 import android.util.Log;
+import android.util.Pair;
 
 import com.shockwave.pdfium.PdfDocument;
 import com.shockwave.pdfium.PdfiumCore;
@@ -14,6 +15,8 @@ import java.util.List;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+
+import static android.R.attr.value;
 
 /**
  * @author <a href="mailto:okaminskyi@intropro.com">Oleh Kaminskyi</a>
@@ -25,14 +28,15 @@ public class PdfViewRenderManager {
 
     private BitmapCache cache = new BitmapCache(cacheSize);
 
-    private ThreadPoolExecutor thumbnailExecutor = new ThreadPoolExecutor(1, 2, 1, TimeUnit.SECONDS, new SynchronousQueue<Runnable>());
-    private ThreadPoolExecutor contentExecutor = new ThreadPoolExecutor(1, 2, 1, TimeUnit.SECONDS, new SynchronousQueue<Runnable>());
-
+    private ThreadPoolExecutor thumbnailExecutor = new ThreadPoolExecutor(1, Integer.MAX_VALUE, 1, TimeUnit.SECONDS, new SynchronousQueue<Runnable>());
+    private ThreadPoolExecutor contentExecutor = new ThreadPoolExecutor(1, Integer.MAX_VALUE, 1, TimeUnit.SECONDS, new SynchronousQueue<Runnable>());
 
     private static final String TAG = PdfViewRenderManager.class.getSimpleName();
     private final PdfiumCore pdfium;
     private final PdfDocument document;
     private final PdfViewRenderer renderer;
+
+
 
     private List<PagePart> renderedThumbnails = new ArrayList<>();
     private RenderThumbnailsTask renderThumbnailsTask;
@@ -47,7 +51,7 @@ public class PdfViewRenderManager {
     }
 
 
-    public void renderThumbnail(List<Page> thumbPages) {
+    public void renderThumbnails(List<Page> thumbPages) {
         boolean allRendered = true;
         for (Page tPage : thumbPages) {
             if(!renderedThumbnails.contains(tPage.getThumbnail())) {
@@ -63,10 +67,7 @@ public class PdfViewRenderManager {
             toRenderParts.add(page.getThumbnail());
         }
 
-        RenderThumbnailsTask newRenderTask = new RenderThumbnailsTask();
-
-        logRenderedContent("Should be rendered thumbnails : ", toRenderParts);
-
+        RenderThumbnailsTask newRenderTask = new RenderThumbnailsTask(thumbPages);
         if(renderThumbnailsTask != null) {
             cancelRendering(renderedThumbnails, toRenderParts, renderThumbnailsTask, newRenderTask,
                     thumbnailExecutor, "Rendered thumbnails : ");
@@ -102,6 +103,7 @@ public class PdfViewRenderManager {
             public void run() {
                 recycleUnusedParts(renderedParts, toRenderParts);
                 logRenderedContent(message, renderedParts);
+                Log.wtf("Okaminskyi", "Task Started on Cancel " + newRenderTask.hashCode());
                 newRenderTask.executeOnExecutor(executor, toRenderParts);
             }
         });
@@ -109,7 +111,7 @@ public class PdfViewRenderManager {
     }
 
     public void updateQuality(List<Page> renderingPages) {
-        renderContent(renderingPages);
+//        renderContent(renderingPages);
     }
 
     public void renderContent(List<Page> renderingPages) {
@@ -141,10 +143,10 @@ public class PdfViewRenderManager {
 
     public void draw(Canvas canvas, List<Page> pages) {
         for (Page p : pages) {
-            p.getThumbnail().drawPart(canvas, p.getScale(), p.getRenderLeft(), p.getRenderTop(), true);
-            for (PagePart pPart : p.getParts()) {
-                pPart.drawPart(canvas, p.getScale(), p.getRenderLeft(), p.getRenderTop());
-            }
+            p.drawThumbnail(canvas);
+//            for (PagePart pPart : p.getParts()) {
+//                pPart.drawPart(canvas, p.getScale(), p.getRenderLeft(), p.getRenderTop());
+//            }
         }
     }
 
@@ -161,6 +163,7 @@ public class PdfViewRenderManager {
         if(renderContentTask != null) {
             renderContentTask.cancel(true);
         }
+
         if(renderThumbnailsTask != null) {
             renderThumbnailsTask.cancel(true);
         }
@@ -178,6 +181,7 @@ public class PdfViewRenderManager {
     public class RenderTask extends AsyncTask<List<PagePart>, PagePart, PagePart> {
 
         private Runnable onCancel;
+        private boolean cancelNotified;
 
         public void setCancelListener(Runnable onCancel) {
             this.onCancel = onCancel;
@@ -190,7 +194,11 @@ public class PdfViewRenderManager {
                 if (part.isRendered()) {
                     continue;
                 }
+                if(this instanceof RenderThumbnailsTask)
+                    Log.wtf("Okaminskyi", "Start RenderPart " + part.index + " bounds " + part.getBounds());
                 part.renderPart(document, pdfium, cache);
+                if(this instanceof RenderThumbnailsTask)
+                    Log.wtf("Okaminskyi", "Finish RenderPar");
                 if(isCancelled()) {
                     return part;
                 } else {
@@ -207,7 +215,9 @@ public class PdfViewRenderManager {
             if(onCancel != null) {
                 onCancel.run();
             }
+            cancelNotified = true;
         }
+
 
         @Override
         @CallSuper
@@ -218,6 +228,12 @@ public class PdfViewRenderManager {
 
 
     public class RenderThumbnailsTask extends RenderTask {
+
+        private final List<Page> pages;
+
+        public RenderThumbnailsTask(List<Page> pages) {
+            this.pages = pages;
+        }
 
         @Override
         protected void onPreExecute() {
@@ -236,6 +252,16 @@ public class PdfViewRenderManager {
 
         @Override
         protected PagePart doInBackground(List<PagePart>... params) {
+            for (Page page : pages) {
+                if(page.isNotStub()) {
+                    continue;
+                }
+                int oldBottom = page.getBottom();
+                page.preparePage();
+                renderer.pageSizeUpdated(page, 0);
+                params[0].remove(null);
+                params[0].add(page.getThumbnail());
+            }
             return super.doInBackground(params);
         }
 

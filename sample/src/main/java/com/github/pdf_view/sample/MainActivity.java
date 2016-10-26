@@ -56,11 +56,14 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void initPdfView(Uri uri) {
+        if(pdfUri == null) {
+            return;
+        }
         pdfView.from(uri).setDoubleTapScale(4f).setPageSpacing(
                 getResources().getDimensionPixelSize(R.dimen.activity_horizontal_margin)
         ).setDoubleTapScaleAnimationDuration(500)
                 .setPassword("12345")
-                .setStartPage(2)
+                .setStartPage(5)
                 .setOnPageChangeListener(this)
                 .setOnLoadListener(this)
                 .setOnErrorListener(this)

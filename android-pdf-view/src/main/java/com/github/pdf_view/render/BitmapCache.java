@@ -3,6 +3,7 @@ package com.github.pdf_view.render;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.support.v4.graphics.BitmapCompat;
+import android.util.Log;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -76,11 +77,14 @@ public class BitmapCache {
     }
 
     public synchronized void evictAll() {
+        Log.wtf("Okaminskyi", "Statr Recycling ");
         for (Map.Entry<Point, LinkedList<Bitmap>> entries : sizedCache.entrySet()) {
             for (Bitmap bitmap : entries.getValue()) {
+                Log.wtf("Okaminskyi", "Recycled ");
                 bitmap.recycle();
             }
         }
+        Log.wtf("Okaminskyi", "Finish Recycling ");
         sizedCache.clear();
     }
 }

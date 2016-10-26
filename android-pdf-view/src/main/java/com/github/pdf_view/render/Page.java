@@ -1,6 +1,11 @@
 package com.github.pdf_view.render;
 
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Point;
 import android.graphics.Rect;
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,20 +16,19 @@ import java.util.List;
  */
 public class Page {
 
+    private static final String TAG = Page.class.getName();
+    private PageSizeResolver resolver;
     private RenderInfo renderInfo;
     private PagePart thumbnail;
     private float lastUpdatedScale;
-    private int pageOffsetTop;
-    private int width;
-    private int pageOffsetLeft;
-    private int height;
+    private Page previousPage;
     private int index;
     List<PagePart> parts = new ArrayList<>();
+    private boolean isDefault = true;
 
-    public Page (int pageIndex, int width, int height, RenderInfo renderInfo) {
+    public Page (int pageIndex, RenderInfo renderInfo) {
         this.index = pageIndex;
-        this.width = width;
-        this.height = height;
+        resolver = new StubPageSizeResolver();
         this.renderInfo = renderInfo;
     }
 
@@ -34,15 +38,18 @@ public class Page {
     }
 
     private int getHeight() {
-        return (int) (height * renderInfo.getScale() * renderInfo.getNormalizeScale());
+        return resolver.getHeight(renderInfo);
     }
 
     private int getWidth() {
-        return (int) (width * renderInfo.getScale() * renderInfo.getNormalizeScale());
+        return resolver.getWidth(renderInfo);
     }
 
     public int getTop() {
-        return (int) ((pageOffsetTop * renderInfo.getNormalizeScale() + renderInfo.getPageSpacing() * index) * renderInfo.getScale());
+        if(previousPage == null) {
+            return 0;
+        }
+        return (int) (previousPage.getBottom() + renderInfo.getPageSpacing() * renderInfo.getScale());
     }
 
     public float getScale() {
@@ -54,7 +61,7 @@ public class Page {
     }
 
     public int getRenderLeft() {
-        return (int) (pageOffsetLeft * renderInfo.getScale() + renderInfo.getRenderOffsetLeft() - renderInfo.getScrollX());
+        return resolver.getRenderLeftOffset(renderInfo) + renderInfo.getRenderOffsetLeft() - renderInfo.getScrollX();
     }
 
     public List<PagePart> getParts() {
@@ -62,6 +69,9 @@ public class Page {
     }
 
     public void prepareActualParts() {
+        if(isDefault) {
+            return;
+        }
         int renderWidth = renderInfo.getRenderWidth();
         int renderHeight = renderInfo.getRenderHeight();
         int partWidth = renderInfo.getPartWidth();
@@ -120,37 +130,61 @@ public class Page {
     }
 
     public PagePart getThumbnail() {
+        if(isDefault) {
+            return null;
+        }
+        if(thumbnail == null) {
+            createThumbnail();
+        }
         return thumbnail;
     }
 
-    public void createThumbnail() {
+    public void preparePage() {
+        if(!isDefault) {
+            return;
+        }
+        Log.i(TAG, "Page " + index + " is ready");
+        Point pageSize = renderInfo.getPageSize(index);
+        resolver = new RealPageSizeResolver(pageSize.x, pageSize.y);
+        isDefault = false;
+        Log.wtf("Okaminskyi", "Page is prepared " + index);
+    }
+
+    private void createThumbnail() {
         thumbnail = new PagePart(
-                new Rect(0, 0, getWidth(), getHeight()), index,
-                getWidth(), getHeight(), getScale());
+                new Rect(0, 0, resolver.getNormalizedWidth(renderInfo),
+                        resolver.getNormalizedHeight(renderInfo)), index,
+                resolver.getNormalizedWidth(renderInfo), resolver.getNormalizedHeight(renderInfo), 1);
     }
 
     public int getPageOffsetLeft() {
-        return (int) (pageOffsetLeft * getScale());
+        return resolver.getRenderLeftOffset(renderInfo);
     }
 
-    public int getOriginalWidth() {
-        return width;
+    public float getOptimalPageScale() {
+        return resolver.getOptimalPageScale(renderInfo);
     }
 
-    public int getPageOffsetTop() {
-        return pageOffsetTop;
+    public void setPreviousPage(Page previousPage) {
+        this.previousPage = previousPage;
     }
 
-    public int getOriginalHeight() {
-        return height;
+    public void drawThumbnail(Canvas canvas) {
+        if(thumbnail != null) {
+            thumbnail.drawPart(canvas, getScale(), getRenderLeft(), getRenderTop(), true);
+        } else {
+            Paint paint = new Paint();
+            paint.setColor(Color.WHITE);
+            canvas.drawRect(getRenderLeft(), getRenderTop(), getRenderLeft() + getWidth(), getBottom(), paint);
+        }
     }
 
-    public void setPageOffsetTop(int pageOffsetTop) {
-        this.pageOffsetTop = pageOffsetTop;
+    public boolean isNotStub() {
+        return !isDefault;
     }
 
-    public void setPageOffsetLeft(int pageOffsetLeft) {
-        this.pageOffsetLeft = pageOffsetLeft;
+    public int getIndex() {
+        return index;
     }
 }
 

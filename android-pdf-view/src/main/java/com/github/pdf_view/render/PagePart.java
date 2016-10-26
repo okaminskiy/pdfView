@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.Rect;
+import android.util.Log;
 
 import com.shockwave.pdfium.PdfDocument;
 import com.shockwave.pdfium.PdfiumCore;
@@ -99,6 +100,10 @@ public class PagePart {
         result = 31 * result + (renderedPagePart != null ? renderedPagePart.hashCode() : 0);
         result = 31 * result + index;
         return result;
+    }
+
+    public Rect getBounds() {
+        return bounds;
     }
 }
 
