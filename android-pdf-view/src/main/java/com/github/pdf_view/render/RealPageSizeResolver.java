@@ -46,4 +46,9 @@ public class RealPageSizeResolver implements PageSizeResolver {
         }
         return 0;
     }
+
+    @Override
+    public int getOriginalHeight(RenderInfo renderInfo) {
+        return height;
+    }
 }

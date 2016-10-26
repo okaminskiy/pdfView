@@ -17,4 +17,6 @@ public interface PageSizeResolver {
     float getOptimalPageScale(RenderInfo info);
 
     int getRenderLeftOffset(RenderInfo renderInfo);
+
+    int getOriginalHeight(RenderInfo renderInfo);
 }

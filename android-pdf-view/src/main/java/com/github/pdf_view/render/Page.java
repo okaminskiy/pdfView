@@ -21,10 +21,11 @@ public class Page {
     private RenderInfo renderInfo;
     private PagePart thumbnail;
     private float lastUpdatedScale;
-    private Page previousPage;
+    private Page nextPage;
     private int index;
     List<PagePart> parts = new ArrayList<>();
     private boolean isDefault = true;
+    private int topPosition;
 
     public Page (int pageIndex, RenderInfo renderInfo) {
         this.index = pageIndex;
@@ -46,10 +47,11 @@ public class Page {
     }
 
     public int getTop() {
-        if(previousPage == null) {
-            return 0;
-        }
-        return (int) (previousPage.getBottom() + renderInfo.getPageSpacing() * renderInfo.getScale());
+        return (int) ((topPosition * renderInfo.getNormalizeScale() + renderInfo.getPageSpacing() * index) * renderInfo.getScale());
+    }
+
+    private int getPageOriginalBottom() {
+        return topPosition + resolver.getOriginalHeight(renderInfo);
     }
 
     public float getScale() {
@@ -145,9 +147,21 @@ public class Page {
         }
         Log.i(TAG, "Page " + index + " is ready");
         Point pageSize = renderInfo.getPageSize(index);
+        int oldBottom = getPageOriginalBottom();
         resolver = new RealPageSizeResolver(pageSize.x, pageSize.y);
         isDefault = false;
+        if(nextPage != null) {
+            nextPage.offsetBy(getPageOriginalBottom() - oldBottom);
+        }
         Log.wtf("Okaminskyi", "Page is prepared " + index);
+    }
+
+    private void offsetBy(int dy) {
+        Page next = nextPage;
+        while (next != null) {
+            next.topPosition += dy;
+            next = next.nextPage;
+        }
     }
 
     private void createThumbnail() {
@@ -165,8 +179,8 @@ public class Page {
         return resolver.getOptimalPageScale(renderInfo);
     }
 
-    public void setPreviousPage(Page previousPage) {
-        this.previousPage = previousPage;
+    public void setNextPage(Page nextPage) {
+        this.nextPage = nextPage;
     }
 
     public void drawThumbnail(Canvas canvas) {
@@ -185,6 +199,10 @@ public class Page {
 
     public int getIndex() {
         return index;
+    }
+
+    public void setPreviousPage(Page page) {
+        topPosition = page.getPageOriginalBottom();
     }
 }
 

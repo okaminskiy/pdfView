@@ -14,7 +14,6 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.ParcelFileDescriptor;
 import android.os.Parcelable;
-import android.util.Log;
 import android.view.Display;
 import android.view.WindowManager;
 
@@ -136,6 +135,7 @@ public class PdfViewRenderer implements RenderInfo {
         }
         renderWidth = width;
         renderHeight = height;
+        optimalScale = pages.get(initialPage).getOptimalPageScale();
 //        initPages(0, pages.size());
         scrollToPage(initialPage == -1 ? 0 : initialPage);
         updateQuality();
@@ -147,11 +147,15 @@ public class PdfViewRenderer implements RenderInfo {
         Page page = null;
         for(int i = 0; i < pageCount; i++) {
             Page newPage = new Page(i, this);
-            newPage.setPreviousPage(page);
+            if(page != null) {
+                page.setNextPage(newPage);
+                newPage.setPreviousPage(page);
+            }
             page = newPage;
             pages.add(page);
         }
         initialPage = configuration.getStartPage();
+        pages.get(initialPage).preparePage();
     }
 
     public int getHorizontalScrollExtent() {
@@ -352,9 +356,9 @@ public class PdfViewRenderer implements RenderInfo {
 
 
     public void pageSizeUpdated(Page page, int deltaBottom) {
-        if(optimalScale == 0) {
-            optimalScale = page.getOptimalPageScale();
-        }
+//        if(optimalScale == 0) {
+//            optimalScale = page.getOptimalPageScale();
+//        }
 //        if(page.getIndex() < firstVisiblePage) {
 //            scrollBy(0, deltaBottom);
 //        }

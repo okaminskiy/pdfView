@@ -38,4 +38,8 @@ public class StubPageSizeResolver implements PageSizeResolver{
     public int getRenderLeftOffset(RenderInfo renderInfo) {
         return 0;
     }
+
+    public int getOriginalHeight(RenderInfo renderInfo) {
+        return (int) (renderInfo.getRenderHeight() / renderInfo.getNormalizeScale());
+    }
 }

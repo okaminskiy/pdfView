@@ -256,7 +256,6 @@ public class PdfViewRenderManager {
                 if(page.isNotStub()) {
                     continue;
                 }
-                int oldBottom = page.getBottom();
                 page.preparePage();
                 renderer.pageSizeUpdated(page, 0);
                 params[0].remove(null);
