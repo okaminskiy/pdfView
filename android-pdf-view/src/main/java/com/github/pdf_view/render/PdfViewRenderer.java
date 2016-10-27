@@ -23,6 +23,7 @@ import com.shockwave.pdfium.PdfiumCore;
 
 import java.io.File;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -69,6 +70,7 @@ public class PdfViewRenderer implements RenderInfo {
 
     private PdfViewRenderManager pdfRenderManager;
     private float maxAvailableScale;
+    private int maxAvilibleScale;
 
     public PdfViewRenderer(Context context, PdfRendererListener listener) {
         pdfiumCore = new PdfiumCore(context);
@@ -103,7 +105,6 @@ public class PdfViewRenderer implements RenderInfo {
                 try {
                     pdfDocument = pdfiumCore.newDocument(getSeekableFileDescriptor(
                             configuration.getUri().toString()), configuration.getPassword());
-                    preparePages();
                     return pdfDocument;
                 } catch (final IOException e) {
                     new Handler(context.getMainLooper()).post(new Runnable() {
@@ -121,6 +122,7 @@ public class PdfViewRenderer implements RenderInfo {
                 if(document == null) {
                     return;
                 }
+                initialPage = configuration.getStartPage();
                 pdfRenderManager = new PdfViewRenderManager(document, pdfiumCore, PdfViewRenderer.this);
                 configuration.notifyPageLoaded(pdfiumCore.getPageCount(pdfDocument));
                 listener.onDocumentReady(PdfViewRenderer.this, configuration);
@@ -135,9 +137,12 @@ public class PdfViewRenderer implements RenderInfo {
         }
         renderWidth = width;
         renderHeight = height;
-        optimalScale = pages.get(initialPage).getOptimalPageScale();
-//        initPages(0, pages.size());
-        scrollToPage(initialPage == -1 ? 0 : initialPage);
+        if(initialPage == -1) {
+            initialPage = 0;
+        }
+        optimalScale = (float) renderWidth / getPageSize(initialPage).x;
+        preparePages();
+        scrollToPage(initialPage);
         updateQuality();
     }
 
@@ -275,9 +280,9 @@ public class PdfViewRenderer implements RenderInfo {
     }
 
     private float fixScale(float deltaScale) {
-        float newScale =  deltaScale * this.scale;
-        float maxZoom = Math.min(maxAvailableScale, configuration.getMaxScale());
-        if(newScale > maxZoom) {
+        float newScale = deltaScale * this.scale;
+        float maxZoom = Math.min(getMaxAvailibleScale(), configuration.getMaxScale());
+        if (newScale > maxZoom) {
             return maxZoom / scale;
         }
         if (newScale < configuration.getMinScale()) {
@@ -328,7 +333,9 @@ public class PdfViewRenderer implements RenderInfo {
     }
 
     public void updateQuality() {
-        pdfRenderManager.updateQuality(getRenderingPages());
+        if(scale > 1) {
+            pdfRenderManager.updateQuality(getRenderingPages());
+        }
     }
 
     public void notifyUpdate() {
@@ -365,6 +372,10 @@ public class PdfViewRenderer implements RenderInfo {
 //        updateThumbnails();
 //        notifyUpdate();
 //        Log.wtf("Okaminskyi", "PageSize updated");
+    }
+
+    public float getMaxAvailibleScale() {
+        return (float) Integer.MAX_VALUE / getLastPageBottom();
     }
 
     public interface PdfRendererListener {

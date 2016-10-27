@@ -42,7 +42,8 @@ public class RealPageSizeResolver implements PageSizeResolver {
     @Override
     public int getRenderLeftOffset(RenderInfo renderInfo) {
         if(getOptimalPageScale(renderInfo) != renderInfo.getNormalizeScale()) {
-            return (renderInfo.getRenderWidth() - getNormalizedWidth(renderInfo)) / 2;
+            return (int) ((renderInfo.getRenderWidth() *
+                                renderInfo.getScale() - getWidth(renderInfo)) / 2);
         }
         return 0;
     }

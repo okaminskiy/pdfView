@@ -12,6 +12,7 @@ import com.shockwave.pdfium.PdfiumCore;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -28,8 +29,8 @@ public class PdfViewRenderManager {
 
     private BitmapCache cache = new BitmapCache(cacheSize);
 
-    private ThreadPoolExecutor thumbnailExecutor = new ThreadPoolExecutor(1, Integer.MAX_VALUE, 1, TimeUnit.SECONDS, new SynchronousQueue<Runnable>());
-    private ThreadPoolExecutor contentExecutor = new ThreadPoolExecutor(1, Integer.MAX_VALUE, 1, TimeUnit.SECONDS, new SynchronousQueue<Runnable>());
+    private ThreadPoolExecutor thumbnailExecutor = new ThreadPoolExecutor(1, Integer.MAX_VALUE, 1, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+    private ThreadPoolExecutor contentExecutor = new ThreadPoolExecutor(1, Integer.MAX_VALUE, 1, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
 
     private static final String TAG = PdfViewRenderManager.class.getSimpleName();
     private final PdfiumCore pdfium;
@@ -103,15 +104,16 @@ public class PdfViewRenderManager {
             public void run() {
                 recycleUnusedParts(renderedParts, toRenderParts);
                 logRenderedContent(message, renderedParts);
-                Log.wtf("Okaminskyi", "Task Started on Cancel " + newRenderTask.hashCode());
                 newRenderTask.executeOnExecutor(executor, toRenderParts);
             }
         });
-        cancelRenderTask.cancel(false);
+        if(!cancelRenderTask.isCancelled()) {
+            cancelRenderTask.cancel(false);
+        }
     }
 
     public void updateQuality(List<Page> renderingPages) {
-//        renderContent(renderingPages);
+        renderContent(renderingPages);
     }
 
     public void renderContent(List<Page> renderingPages) {
@@ -144,9 +146,9 @@ public class PdfViewRenderManager {
     public void draw(Canvas canvas, List<Page> pages) {
         for (Page p : pages) {
             p.drawThumbnail(canvas);
-//            for (PagePart pPart : p.getParts()) {
-//                pPart.drawPart(canvas, p.getScale(), p.getRenderLeft(), p.getRenderTop());
-//            }
+            for (PagePart pPart : p.getParts()) {
+                pPart.drawPart(canvas, p.getScale(), p.getRenderLeft(), p.getRenderTop());
+            }
         }
     }
 
@@ -181,7 +183,6 @@ public class PdfViewRenderManager {
     public class RenderTask extends AsyncTask<List<PagePart>, PagePart, PagePart> {
 
         private Runnable onCancel;
-        private boolean cancelNotified;
 
         public void setCancelListener(Runnable onCancel) {
             this.onCancel = onCancel;
@@ -190,15 +191,14 @@ public class PdfViewRenderManager {
         @Override
         protected PagePart doInBackground(List<PagePart>... params) {
             List<PagePart> parts = params[0];
+            if(isCancelled()) {
+                return null;
+            }
             for (PagePart part : parts) {
                 if (part.isRendered()) {
                     continue;
                 }
-                if(this instanceof RenderThumbnailsTask)
-                    Log.wtf("Okaminskyi", "Start RenderPart " + part.index + " bounds " + part.getBounds());
                 part.renderPart(document, pdfium, cache);
-                if(this instanceof RenderThumbnailsTask)
-                    Log.wtf("Okaminskyi", "Finish RenderPar");
                 if(isCancelled()) {
                     return part;
                 } else {
@@ -214,8 +214,8 @@ public class PdfViewRenderManager {
             super.onCancelled();
             if(onCancel != null) {
                 onCancel.run();
+                onCancel = null;
             }
-            cancelNotified = true;
         }
 
 
@@ -252,13 +252,12 @@ public class PdfViewRenderManager {
 
         @Override
         protected PagePart doInBackground(List<PagePart>... params) {
+            params[0].clear();
             for (Page page : pages) {
-                if(page.isNotStub()) {
-                    continue;
+                if(!page.isNotStub()) {
+                    page.preparePage();
+                    renderer.pageSizeUpdated(page, 0);
                 }
-                page.preparePage();
-                renderer.pageSizeUpdated(page, 0);
-                params[0].remove(null);
                 params[0].add(page.getThumbnail());
             }
             return super.doInBackground(params);

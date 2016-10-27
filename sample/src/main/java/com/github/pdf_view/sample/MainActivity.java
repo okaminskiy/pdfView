@@ -63,7 +63,7 @@ public class MainActivity extends AppCompatActivity
                 getResources().getDimensionPixelSize(R.dimen.activity_horizontal_margin)
         ).setDoubleTapScaleAnimationDuration(500)
                 .setPassword("12345")
-                .setStartPage(5)
+                .setStartPage(100)
                 .setOnPageChangeListener(this)
                 .setOnLoadListener(this)
                 .setOnErrorListener(this)

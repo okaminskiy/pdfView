@@ -151,7 +151,7 @@ public class Page {
         resolver = new RealPageSizeResolver(pageSize.x, pageSize.y);
         isDefault = false;
         if(nextPage != null) {
-            nextPage.offsetBy(getPageOriginalBottom() - oldBottom);
+            offsetBy(getPageOriginalBottom() - oldBottom);
         }
         Log.wtf("Okaminskyi", "Page is prepared " + index);
     }
